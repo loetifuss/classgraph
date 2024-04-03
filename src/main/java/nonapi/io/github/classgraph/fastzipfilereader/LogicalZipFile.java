@@ -486,10 +486,6 @@ public class LogicalZipFile extends ZipFileSlice {
             throw new IOException("Multi-disk jarfiles not supported: " + getPath());
         }
         long cenSize = reader.readUnsignedInt(eocdPos + 12);
-        if (cenSize > eocdPos) {
-            throw new IOException(
-                    "Central directory size out of range: " + cenSize + " vs. " + eocdPos + ": " + getPath());
-        }
         long cenOff = reader.readUnsignedInt(eocdPos + 16);
         long cenPos = eocdPos - cenSize;
 
@@ -534,6 +530,11 @@ public class LogicalZipFile extends ZipFileSlice {
                 throw new IOException(
                         "Mismatch in central directory offset: " + cenOff + " vs. " + cenOff64 + ": " + getPath());
             }
+        }
+
+        if (cenSize > eocdPos) {
+            throw new IOException(
+                    "Central directory size out of range: " + cenSize + " vs. " + eocdPos + ": " + getPath());
         }
 
         // Get offset of first local file header
