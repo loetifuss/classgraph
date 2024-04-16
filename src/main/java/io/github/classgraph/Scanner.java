@@ -34,10 +34,14 @@ import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
+import java.nio.file.FileSystem;
 import java.nio.file.FileSystemNotFoundException;
+import java.nio.file.FileSystems;
+import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.AbstractMap.SimpleEntry;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -548,16 +552,19 @@ class Scanner implements Callable<ScanResult> {
                             throw new IOException("Ignoring JrtFS filesystem path "
                                     + "(modules are scanned using the JPMS API): " + path);
                         }
-                        if (FileUtils.canReadAndIsFile(path)) {
-                            // classpathEntObj is a Path which points to a file, so it must be a jar
-                            isJar = true;
-                        } else if (FileUtils.canReadAndIsDir(path)) {
-                            // classpathEntObj is a Path which points to a dir
-                            isJar = false;
-                        } else if (!FileUtils.canRead(path)) {
+                        if (!FileUtils.canRead(path)) {
                             throw new IOException("Cannot read path: " + path);
                         } else {
-                            throw new IOException("Not a file or directory: " + path);
+                            BasicFileAttributes attributes = Files.readAttributes(path, BasicFileAttributes.class);
+                            if (attributes.isRegularFile()) {
+                                // classpathEntObj is a Path which points to a file, so it must be a jar
+                                isJar = true;
+                            } else if (attributes.isDirectory()) {
+                                // classpathEntObj is a Path which points to a dir
+                                isJar = false;
+                            } else {
+                                throw new IOException("Not a file or directory: " + path);
+                            }
                         }
                     } else {
                         // Should not happen
