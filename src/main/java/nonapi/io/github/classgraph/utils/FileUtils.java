@@ -305,13 +305,10 @@ public final class FileUtils {
         } catch (UnsupportedOperationException ignored) {
         }
         try {
-            if (!Files.isReadable(path)) {
-                return false;
-            }
+            return Files.isReadable(path);
         } catch (final SecurityException e) {
             return false;
         }
-        return Files.isRegularFile(path);
     }
 
     /**
