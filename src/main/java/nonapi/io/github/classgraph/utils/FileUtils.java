@@ -301,6 +301,10 @@ public final class FileUtils {
      */
     public static boolean canRead(final Path path) {
         try {
+            return canRead(path.toFile());
+        } catch (UnsupportedOperationException ignored) {
+        }
+        try {
             if (!Files.isReadable(path)) {
                 return false;
             }
@@ -336,6 +340,10 @@ public final class FileUtils {
      * @return true if the file exists, is a regular file, and can be read.
      */
     public static boolean canReadAndIsFile(final Path path) {
+        try {
+            return canReadAndIsFile(path.toFile());
+        } catch (UnsupportedOperationException ignored) {
+        }
         try {
             if (!Files.isReadable(path)) {
                 return false;
@@ -377,6 +385,11 @@ public final class FileUtils {
      */
     public static void checkCanReadAndIsFile(final Path path) throws IOException {
         try {
+            checkCanReadAndIsFile(path.toFile());
+            return;
+        } catch (UnsupportedOperationException ignored) {
+        }
+        try {
             if (!Files.isReadable(path)) {
                 throw new FileNotFoundException("Path does not exist or cannot be read: " + path);
             }
@@ -414,6 +427,10 @@ public final class FileUtils {
      * @return true if the file exists, is a directory, and can be read.
      */
     public static boolean canReadAndIsDir(final Path path) {
+        try {
+            return canReadAndIsDir(path.toFile());
+        } catch (UnsupportedOperationException ignored) {
+        }
         try {
             if (!Files.isReadable(path)) {
                 return false;
