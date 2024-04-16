@@ -37,15 +37,20 @@ import java.nio.ByteBuffer;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.nio.file.attribute.FileTime;
 import java.nio.file.attribute.PosixFileAttributes;
 import java.nio.file.attribute.PosixFilePermission;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Function;
 
 import io.github.classgraph.Scanner.ClasspathEntryWorkUnit;
 import nonapi.io.github.classgraph.classloaderhandler.ClassLoaderHandlerRegistry;
@@ -156,23 +161,28 @@ class ClasspathElementDir extends ClasspathElement {
      *
      * @param resourcePath
      *            the {@link Path} for the resource
-     * @param nestedJarHandler
-     *            the nested jar handler
      * @return the resource
      */
-    private Resource newResource(final Path resourcePath, final NestedJarHandler nestedJarHandler) {
-        long length;
-        try {
-            length = Files.size(resourcePath);
-        } catch (IOException | SecurityException e) {
-            length = -1L;
-        }
-        return new Resource(this, length) {
+    private Resource newResource(final Path resourcePath, BasicFileAttributes attributes) {
+        final int notYetLoadedLength = -2;
+        return new Resource(this, attributes == null ? notYetLoadedLength : attributes.size()) {
             /** The {@link PathSlice} opened on the file. */
             private PathSlice pathSlice;
 
             /** True if the resource is open. */
             private final AtomicBoolean isOpen = new AtomicBoolean();
+
+            @Override
+            public long getLength() {
+                if (length == notYetLoadedLength) {
+                    try {
+                        length = Files.size(resourcePath);
+                    } catch (IOException | SecurityException e) {
+                        length = -1;
+                    }
+                }
+                return length;
+            }
 
             @Override
             public String getPath() {
@@ -191,7 +201,7 @@ class ClasspathElementDir extends ClasspathElement {
             @Override
             public long getLastModified() {
                 try {
-                    return resourcePath.toFile().lastModified();
+                    return attributes == null ? resourcePath.toFile().lastModified() : attributes.lastModifiedTime().toMillis();
                 } catch (final UnsupportedOperationException e) {
                     return 0L;
                 }
@@ -202,8 +212,12 @@ class ClasspathElementDir extends ClasspathElement {
             public Set<PosixFilePermission> getPosixFilePermissions() {
                 Set<PosixFilePermission> posixFilePermissions = null;
                 try {
-                    posixFilePermissions = Files.readAttributes(resourcePath, PosixFileAttributes.class)
-                            .permissions();
+                    if (attributes instanceof PosixFileAttributes) {
+                        posixFilePermissions = ((PosixFileAttributes) attributes).permissions();
+                    } else {
+                        posixFilePermissions = Files.readAttributes(resourcePath, PosixFileAttributes.class)
+                                .permissions();
+                    }
                 } catch (UnsupportedOperationException | IOException | SecurityException e) {
                     // POSIX attributes not supported
                 }
@@ -297,7 +311,7 @@ class ClasspathElementDir extends ClasspathElement {
     @Override
     Resource getResource(final String relativePath) {
         final Path resourcePath = classpathEltPath.resolve(relativePath);
-        return FileUtils.canReadAndIsFile(resourcePath) ? newResource(resourcePath, nestedJarHandler) : null;
+        return FileUtils.canReadAndIsFile(resourcePath) ? newResource(resourcePath, null) : null;
     }
 
     /**
@@ -393,6 +407,7 @@ class ClasspathElementDir extends ClasspathElement {
             return;
         }
         Collections.sort(pathsInDir);
+        Function<Path, BasicFileAttributes> getFileAttributes = createAttributeCache(pathsInDir);
 
         // Determine whether this is a modular jar running under JRE 9+
         final boolean isModularJar = VersionFinder.JAVA_MAJOR_VERSION >= 9 && getModuleName() != null;
@@ -400,9 +415,11 @@ class ClasspathElementDir extends ClasspathElement {
         // Only scan files in directory if directory is not only an ancestor of an accepted path
         if (parentMatchStatus != ScanSpecPathMatch.ANCESTOR_OF_ACCEPTED_PATH) {
             // Do preorder traversal (files in dir, then subdirs), to reduce filesystem cache misses
-            for (final Path subPath : pathsInDir) {
+            for (final Path subPath : List.copyOf(pathsInDir)) {
                 // Process files in dir before recursing
-                if (Files.isRegularFile(subPath)) {
+                BasicFileAttributes fileAttributes = getFileAttributes.apply(subPath);
+                if (fileAttributes.isRegularFile()) {
+                    pathsInDir.remove(subPath);
                     final Path subPathRelative = classpathEltPath.relativize(subPath);
                     final String subPathRelativeStr = FastPathResolver.resolve(subPathRelative.toString());
                     // If this is a modular jar, ignore all classfiles other than "module-info.class" in the
@@ -423,12 +440,12 @@ class ClasspathElementDir extends ClasspathElement {
                             || (parentMatchStatus == ScanSpecPathMatch.AT_ACCEPTED_CLASS_PACKAGE
                                     && scanSpec.classfileIsSpecificallyAccepted(subPathRelativeStr))) {
                         // Resource is accepted
-                        final Resource resource = newResource(subPath, nestedJarHandler);
+                        final Resource resource = newResource(subPath, fileAttributes);
                         addAcceptedResource(resource, parentMatchStatus, /* isClassfileOnly = */ false, subLog);
 
                         // Save last modified time
                         try {
-                            fileToLastModified.put(subPath.toFile(), subPath.toFile().lastModified());
+                            fileToLastModified.put(subPath.toFile(), fileAttributes.lastModifiedTime().toMillis());
                         } catch (final UnsupportedOperationException e) {
                             // Ignore
                         }
@@ -441,23 +458,27 @@ class ClasspathElementDir extends ClasspathElement {
             }
         } else if (scanSpec.enableClassInfo && dirRelativePathStr.equals("/")) {
             // Always check for module descriptor in package root, even if package root isn't in accept
-            for (final Path subPath : pathsInDir) {
-                if (subPath.getFileName().toString().equals("module-info.class") && Files.isRegularFile(subPath)) {
-                    final Resource resource = newResource(subPath, nestedJarHandler);
-                    addAcceptedResource(resource, parentMatchStatus, /* isClassfileOnly = */ true, subLog);
-                    try {
-                        fileToLastModified.put(subPath.toFile(), subPath.toFile().lastModified());
-                    } catch (final UnsupportedOperationException e) {
-                        // Ignore
+            for (final Path subPath : List.copyOf(pathsInDir)) {
+                if (subPath.getFileName().toString().equals("module-info.class")) {
+                    BasicFileAttributes fileAttributes = getFileAttributes.apply(subPath);
+                    if (fileAttributes.isRegularFile()) {
+                        pathsInDir.remove(subPath);
+                        final Resource resource = newResource(subPath, fileAttributes);
+                        addAcceptedResource(resource, parentMatchStatus, /* isClassfileOnly = */ true, subLog);
+                        try {
+                            fileToLastModified.put(subPath.toFile(), fileAttributes.lastModifiedTime().toMillis());
+                        } catch (final UnsupportedOperationException e) {
+                            // Ignore
+                        }
+                        break;
                     }
-                    break;
                 }
             }
         }
         // Recurse into subdirectories
         for (final Path subPath : pathsInDir) {
             try {
-                if (Files.isDirectory(subPath)) {
+                if (FileUtils.isDir(subPath)) {
                     scanPathRecursively(subPath, subLog);
                 }
             } catch (final SecurityException e) {
@@ -478,6 +499,62 @@ class ClasspathElementDir extends ClasspathElement {
         } catch (final UnsupportedOperationException e) {
             // Ignore
         }
+    }
+
+    private static Function<Path, BasicFileAttributes> createAttributeCache(List<Path> pathsInDir) {
+        Map<Path, BasicFileAttributes> attributesCache = new HashMap<>(pathsInDir.size());
+        return path -> attributesCache.computeIfAbsent(path, forPath -> {
+            try {
+                return Files.readAttributes(forPath, BasicFileAttributes.class);
+            } catch (IOException e) {
+                return new BasicFileAttributes() {
+                    @Override
+                    public FileTime lastModifiedTime() {
+                        return FileTime.fromMillis(path.toFile().lastModified());
+                    }
+
+                    @Override
+                    public FileTime lastAccessTime() {
+                        throw new UnsupportedOperationException();
+                    }
+
+                    @Override
+                    public FileTime creationTime() {
+                        return FileTime.fromMillis(0);
+                    }
+
+                    @Override
+                    public boolean isRegularFile() {
+                        return FileUtils.isFile(path);
+                    }
+
+                    @Override
+                    public boolean isDirectory() {
+                        return FileUtils.isDir(path);
+                    }
+
+                    @Override
+                    public boolean isSymbolicLink() {
+                        return false;
+                    }
+
+                    @Override
+                    public boolean isOther() {
+                        return !isRegularFile() && !isDirectory();
+                    }
+
+                    @Override
+                    public long size() {
+                        return path.toFile().length();
+                    }
+
+                    @Override
+                    public Object fileKey() {
+                        throw new UnsupportedOperationException();
+                    }
+                };
+            }
+        });
     }
 
     /**

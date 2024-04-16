@@ -351,6 +351,16 @@ public final class FileUtils {
         return Files.isRegularFile(path);
     }
 
+    public static boolean isFile(final Path path) {
+        try {
+            return path.toFile().isFile();
+        } catch (UnsupportedOperationException e) {
+            return Files.isRegularFile(path);
+        } catch (SecurityException e) {
+            return false;
+        }
+    }
+
     /**
      * Check if a {@link File} exists, is a regular file, and can be read.
      *
@@ -436,6 +446,16 @@ public final class FileUtils {
             return false;
         }
         return Files.isDirectory(path);
+    }
+
+    public static boolean isDir(final Path path) {
+        try {
+            return path.toFile().isDirectory();
+        } catch (UnsupportedOperationException e) {
+            return Files.isDirectory(path);
+        } catch (SecurityException e) {
+            return false;
+        }
     }
 
     /**
