@@ -212,14 +212,8 @@ class ClasspathElementDir extends ClasspathElement {
 
             @Override
             public ByteBuffer read() throws IOException {
-                if (skipClasspathElement) {
-                    // Shouldn't happen
-                    throw new IOException("Parent directory could not be opened");
-                }
-                if (isOpen.getAndSet(true)) {
-                    throw new IOException(
-                            "Resource is already open -- cannot open it again without first calling close()");
-                }
+                checkSkipState();
+                markAsOpen();
                 pathSlice = new PathSlice(resourcePath, nestedJarHandler);
                 length = pathSlice.sliceLength;
                 byteBuffer = pathSlice.read();
@@ -228,14 +222,8 @@ class ClasspathElementDir extends ClasspathElement {
 
             @Override
             ClassfileReader openClassfile() throws IOException {
-                if (skipClasspathElement) {
-                    // Shouldn't happen
-                    throw new IOException("Parent directory could not be opened");
-                }
-                if (isOpen.getAndSet(true)) {
-                    throw new IOException(
-                            "Resource is already open -- cannot open it again without first calling close()");
-                }
+                checkSkipState();
+                markAsOpen();
                 // Classfile won't be compressed, so wrap it in a new PathSlice and then open it
                 pathSlice = new PathSlice(resourcePath, nestedJarHandler);
                 length = pathSlice.sliceLength;
@@ -244,14 +232,8 @@ class ClasspathElementDir extends ClasspathElement {
 
             @Override
             public InputStream open() throws IOException {
-                if (skipClasspathElement) {
-                    // Shouldn't happen
-                    throw new IOException("Parent directory could not be opened");
-                }
-                if (isOpen.getAndSet(true)) {
-                    throw new IOException(
-                            "Resource is already open -- cannot open it again without first calling close()");
-                }
+                checkSkipState();
+                markAsOpen();
                 pathSlice = new PathSlice(resourcePath, nestedJarHandler);
                 inputStream = pathSlice.open(this);
                 length = pathSlice.sliceLength;
@@ -260,7 +242,8 @@ class ClasspathElementDir extends ClasspathElement {
 
             @Override
             public byte[] load() throws IOException {
-                read();
+                checkSkipState();
+                markAsOpen();
                 try (Resource res = this) { // Close this after use
                     pathSlice = new PathSlice(resourcePath, nestedJarHandler);
                     final byte[] bytes = pathSlice.load();
@@ -284,6 +267,20 @@ class ClasspathElementDir extends ClasspathElement {
 
                     // Close inputStream
                     super.close();
+                }
+            }
+
+            private void checkSkipState() throws IOException {
+                if (skipClasspathElement) {
+                    // Shouldn't happen
+                    throw new IOException("Parent directory could not be opened");
+                }
+            }
+
+            private void markAsOpen() throws IOException {
+                if (isOpen.getAndSet(true)) {
+                    throw new IOException(
+                            "Resource is already open -- cannot open it again without first calling close()");
                 }
             }
         };
