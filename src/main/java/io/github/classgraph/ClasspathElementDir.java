@@ -38,19 +38,15 @@ import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
-import java.nio.file.attribute.FileTime;
 import java.nio.file.attribute.PosixFileAttributes;
 import java.nio.file.attribute.PosixFilePermission;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Function;
 
 import io.github.classgraph.Scanner.ClasspathEntryWorkUnit;
 import nonapi.io.github.classgraph.classloaderhandler.ClassLoaderHandlerRegistry;
@@ -163,7 +159,7 @@ class ClasspathElementDir extends ClasspathElement {
      *            the {@link Path} for the resource
      * @return the resource
      */
-    private Resource newResource(final Path resourcePath, BasicFileAttributes attributes) {
+    private Resource newResource(final Path resourcePath, final BasicFileAttributes attributes) {
         final int notYetLoadedLength = -2;
         return new Resource(this, attributes == null ? notYetLoadedLength : attributes.size()) {
             /** The {@link PathSlice} opened on the file. */
@@ -407,7 +403,7 @@ class ClasspathElementDir extends ClasspathElement {
             return;
         }
         Collections.sort(pathsInDir);
-        Function<Path, BasicFileAttributes> getFileAttributes = createAttributeCache(pathsInDir);
+        FileUtils.FileAttributesGetter getFileAttributes = FileUtils.createCachedAttributesGetter();
 
         // Determine whether this is a modular jar running under JRE 9+
         final boolean isModularJar = VersionFinder.JAVA_MAJOR_VERSION >= 9 && getModuleName() != null;
@@ -415,9 +411,9 @@ class ClasspathElementDir extends ClasspathElement {
         // Only scan files in directory if directory is not only an ancestor of an accepted path
         if (parentMatchStatus != ScanSpecPathMatch.ANCESTOR_OF_ACCEPTED_PATH) {
             // Do preorder traversal (files in dir, then subdirs), to reduce filesystem cache misses
-            for (final Path subPath : List.copyOf(pathsInDir)) {
+            for (final Path subPath : new ArrayList<>(pathsInDir)) {
                 // Process files in dir before recursing
-                BasicFileAttributes fileAttributes = getFileAttributes.apply(subPath);
+                BasicFileAttributes fileAttributes = getFileAttributes.get(subPath);
                 if (fileAttributes.isRegularFile()) {
                     pathsInDir.remove(subPath);
                     final Path subPathRelative = classpathEltPath.relativize(subPath);
@@ -458,9 +454,9 @@ class ClasspathElementDir extends ClasspathElement {
             }
         } else if (scanSpec.enableClassInfo && dirRelativePathStr.equals("/")) {
             // Always check for module descriptor in package root, even if package root isn't in accept
-            for (final Path subPath : List.copyOf(pathsInDir)) {
+            for (final Path subPath : new ArrayList<>(pathsInDir)) {
                 if (subPath.getFileName().toString().equals("module-info.class")) {
-                    BasicFileAttributes fileAttributes = getFileAttributes.apply(subPath);
+                    BasicFileAttributes fileAttributes = getFileAttributes.get(subPath);
                     if (fileAttributes.isRegularFile()) {
                         pathsInDir.remove(subPath);
                         final Resource resource = newResource(subPath, fileAttributes);
@@ -499,62 +495,6 @@ class ClasspathElementDir extends ClasspathElement {
         } catch (final UnsupportedOperationException e) {
             // Ignore
         }
-    }
-
-    private static Function<Path, BasicFileAttributes> createAttributeCache(List<Path> pathsInDir) {
-        Map<Path, BasicFileAttributes> attributesCache = new HashMap<>(pathsInDir.size());
-        return path -> attributesCache.computeIfAbsent(path, forPath -> {
-            try {
-                return Files.readAttributes(forPath, BasicFileAttributes.class);
-            } catch (IOException e) {
-                return new BasicFileAttributes() {
-                    @Override
-                    public FileTime lastModifiedTime() {
-                        return FileTime.fromMillis(path.toFile().lastModified());
-                    }
-
-                    @Override
-                    public FileTime lastAccessTime() {
-                        throw new UnsupportedOperationException();
-                    }
-
-                    @Override
-                    public FileTime creationTime() {
-                        return FileTime.fromMillis(0);
-                    }
-
-                    @Override
-                    public boolean isRegularFile() {
-                        return FileUtils.isFile(path);
-                    }
-
-                    @Override
-                    public boolean isDirectory() {
-                        return FileUtils.isDir(path);
-                    }
-
-                    @Override
-                    public boolean isSymbolicLink() {
-                        return false;
-                    }
-
-                    @Override
-                    public boolean isOther() {
-                        return !isRegularFile() && !isDirectory();
-                    }
-
-                    @Override
-                    public long size() {
-                        return path.toFile().length();
-                    }
-
-                    @Override
-                    public Object fileKey() {
-                        throw new UnsupportedOperationException();
-                    }
-                };
-            }
-        });
     }
 
     /**

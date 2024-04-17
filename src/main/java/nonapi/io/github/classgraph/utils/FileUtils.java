@@ -39,8 +39,12 @@ import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.nio.file.attribute.FileTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -728,5 +732,77 @@ public final class FileUtils {
             // Nothing to unmap
             return false;
         }
+    }
+
+    public static FileAttributesGetter createCachedAttributesGetter() {
+        final Map<Path, BasicFileAttributes> cache = new HashMap<>();
+        return new FileAttributesGetter() {
+            @Override
+            public BasicFileAttributes get(final Path path) {
+                BasicFileAttributes attributes = cache.get(path);
+                if (attributes == null) {
+                    attributes = readAttributes(path);
+                    cache.put(path, attributes);
+                }
+                return attributes;
+            }
+        };
+    }
+
+    public static BasicFileAttributes readAttributes(final Path path) {
+        try {
+            return Files.readAttributes(path, BasicFileAttributes.class);
+        } catch (IOException e) {
+            return new BasicFileAttributes() {
+                @Override
+                public FileTime lastModifiedTime() {
+                    return FileTime.fromMillis(path.toFile().lastModified());
+                }
+
+                @Override
+                public FileTime lastAccessTime() {
+                    throw new UnsupportedOperationException();
+                }
+
+                @Override
+                public FileTime creationTime() {
+                    return FileTime.fromMillis(0);
+                }
+
+                @Override
+                public boolean isRegularFile() {
+                    return FileUtils.isFile(path);
+                }
+
+                @Override
+                public boolean isDirectory() {
+                    return FileUtils.isDir(path);
+                }
+
+                @Override
+                public boolean isSymbolicLink() {
+                    return false;
+                }
+
+                @Override
+                public boolean isOther() {
+                    return !isRegularFile() && !isDirectory();
+                }
+
+                @Override
+                public long size() {
+                    return path.toFile().length();
+                }
+
+                @Override
+                public Object fileKey() {
+                    throw new UnsupportedOperationException();
+                }
+            };
+        }
+    }
+
+    public interface FileAttributesGetter {
+        BasicFileAttributes get(Path path);
     }
 }
