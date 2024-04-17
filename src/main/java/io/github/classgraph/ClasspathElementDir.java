@@ -111,17 +111,20 @@ class ClasspathElementDir extends ClasspathElement {
                 final Path libDirPath = classpathEltPath.resolve(libDirPrefix);
                 if (FileUtils.canReadAndIsDir(libDirPath)) {
                     // Add all jarfiles within the lib dir as child classpath entries
-                    try (DirectoryStream<Path> stream = Files.newDirectoryStream(libDirPath)) {
+                    try (DirectoryStream<Path> stream = Files.newDirectoryStream(libDirPath, new DirectoryStream.Filter<Path>() {
+                        @Override
+                        public boolean accept(Path filePath) {
+                            return filePath.toString().toLowerCase().endsWith(".jar") && Files.isRegularFile(filePath);
+                        }
+                    })) {
                         for (final Path filePath : stream) {
-                            if (Files.isRegularFile(filePath) && filePath.toString().toLowerCase().endsWith(".jar")) {
-                                if (log != null) {
-                                    log(classpathElementIdx, "Found lib jar: " + filePath, log);
-                                }
-                                workQueue.addWorkUnit(new ClasspathEntryWorkUnit(filePath, getClassLoader(),
-                                        /* parentClasspathElement = */ this,
-                                        /* orderWithinParentClasspathElement = */ childClasspathEntryIdx++,
-                                        /* packageRootPrefix = */ ""));
+                            if (log != null) {
+                                log(classpathElementIdx, "Found lib jar: " + filePath, log);
                             }
+                            workQueue.addWorkUnit(new ClasspathEntryWorkUnit(filePath, getClassLoader(),
+                                    /* parentClasspathElement = */ this,
+                                    /* orderWithinParentClasspathElement = */ childClasspathEntryIdx++,
+                                    /* packageRootPrefix = */ ""));
                         }
                     } catch (final IOException e) {
                         // Ignore -- thrown by Files.newDirectoryStream
