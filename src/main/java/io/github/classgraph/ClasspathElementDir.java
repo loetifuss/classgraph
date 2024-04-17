@@ -226,9 +226,7 @@ class ClasspathElementDir extends ClasspathElement {
             @Override
             public ByteBuffer read() throws IOException {
                 checkSkipState();
-                markAsOpen();
-                pathSlice = new PathSlice(resourcePath, nestedJarHandler);
-                length = pathSlice.sliceLength;
+                openAndCreateSlice();
                 byteBuffer = pathSlice.read();
                 return byteBuffer;
             }
@@ -236,32 +234,27 @@ class ClasspathElementDir extends ClasspathElement {
             @Override
             ClassfileReader openClassfile() throws IOException {
                 checkSkipState();
-                markAsOpen();
                 // Classfile won't be compressed, so wrap it in a new PathSlice and then open it
-                pathSlice = new PathSlice(resourcePath, nestedJarHandler);
-                length = pathSlice.sliceLength;
+                openAndCreateSlice();
                 return new ClassfileReader(pathSlice, this);
             }
 
             @Override
             public InputStream open() throws IOException {
                 checkSkipState();
-                markAsOpen();
-                pathSlice = new PathSlice(resourcePath, nestedJarHandler);
+                openAndCreateSlice();
                 inputStream = pathSlice.open(this);
-                length = pathSlice.sliceLength;
                 return inputStream;
             }
 
             @Override
             public byte[] load() throws IOException {
                 checkSkipState();
-                markAsOpen();
-                try (Resource res = this) { // Close this after use
-                    pathSlice = new PathSlice(resourcePath, nestedJarHandler);
-                    final byte[] bytes = pathSlice.load();
-                    res.length = bytes.length;
-                    return bytes;
+                try {
+                    openAndCreateSlice();
+                    return pathSlice.load();
+                } finally {
+                    close();
                 }
             }
 
@@ -290,11 +283,13 @@ class ClasspathElementDir extends ClasspathElement {
                 }
             }
 
-            private void markAsOpen() throws IOException {
+            private void openAndCreateSlice() throws IOException {
                 if (isOpen.getAndSet(true)) {
                     throw new IOException(
                             "Resource is already open -- cannot open it again without first calling close()");
                 }
+                pathSlice = new PathSlice(resourcePath, false, 0L, nestedJarHandler, false);
+                length = pathSlice.sliceLength;
             }
         };
     }
