@@ -37,6 +37,7 @@ import java.nio.ByteBuffer;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.PosixFileAttributes;
 import java.nio.file.attribute.PosixFilePermission;
 import java.util.ArrayList;
@@ -110,17 +111,20 @@ class ClasspathElementDir extends ClasspathElement {
                 final Path libDirPath = classpathEltPath.resolve(libDirPrefix);
                 if (FileUtils.canReadAndIsDir(libDirPath)) {
                     // Add all jarfiles within the lib dir as child classpath entries
-                    try (DirectoryStream<Path> stream = Files.newDirectoryStream(libDirPath)) {
+                    try (DirectoryStream<Path> stream = Files.newDirectoryStream(libDirPath, new DirectoryStream.Filter<Path>() {
+                        @Override
+                        public boolean accept(Path filePath) {
+                            return filePath.toString().toLowerCase().endsWith(".jar") && Files.isRegularFile(filePath);
+                        }
+                    })) {
                         for (final Path filePath : stream) {
-                            if (Files.isRegularFile(filePath) && filePath.toString().toLowerCase().endsWith(".jar")) {
-                                if (log != null) {
-                                    log(classpathElementIdx, "Found lib jar: " + filePath, log);
-                                }
-                                workQueue.addWorkUnit(new ClasspathEntryWorkUnit(filePath, getClassLoader(),
-                                        /* parentClasspathElement = */ this,
-                                        /* orderWithinParentClasspathElement = */ childClasspathEntryIdx++,
-                                        /* packageRootPrefix = */ ""));
+                            if (log != null) {
+                                log(classpathElementIdx, "Found lib jar: " + filePath, log);
                             }
+                            workQueue.addWorkUnit(new ClasspathEntryWorkUnit(filePath, getClassLoader(),
+                                    /* parentClasspathElement = */ this,
+                                    /* orderWithinParentClasspathElement = */ childClasspathEntryIdx++,
+                                    /* packageRootPrefix = */ ""));
                         }
                     } catch (final IOException e) {
                         // Ignore -- thrown by Files.newDirectoryStream
@@ -156,23 +160,28 @@ class ClasspathElementDir extends ClasspathElement {
      *
      * @param resourcePath
      *            the {@link Path} for the resource
-     * @param nestedJarHandler
-     *            the nested jar handler
      * @return the resource
      */
-    private Resource newResource(final Path resourcePath, final NestedJarHandler nestedJarHandler) {
-        long length;
-        try {
-            length = Files.size(resourcePath);
-        } catch (IOException | SecurityException e) {
-            length = -1L;
-        }
-        return new Resource(this, length) {
+    private Resource newResource(final Path resourcePath, final BasicFileAttributes attributes) {
+        final int notYetLoadedLength = -2;
+        return new Resource(this, attributes == null ? notYetLoadedLength : attributes.size()) {
             /** The {@link PathSlice} opened on the file. */
             private PathSlice pathSlice;
 
             /** True if the resource is open. */
             private final AtomicBoolean isOpen = new AtomicBoolean();
+
+            @Override
+            public long getLength() {
+                if (length == notYetLoadedLength) {
+                    try {
+                        length = Files.size(resourcePath);
+                    } catch (IOException | SecurityException e) {
+                        length = -1;
+                    }
+                }
+                return length;
+            }
 
             @Override
             public String getPath() {
@@ -191,7 +200,7 @@ class ClasspathElementDir extends ClasspathElement {
             @Override
             public long getLastModified() {
                 try {
-                    return resourcePath.toFile().lastModified();
+                    return attributes == null ? resourcePath.toFile().lastModified() : attributes.lastModifiedTime().toMillis();
                 } catch (final UnsupportedOperationException e) {
                     return 0L;
                 }
@@ -202,8 +211,12 @@ class ClasspathElementDir extends ClasspathElement {
             public Set<PosixFilePermission> getPosixFilePermissions() {
                 Set<PosixFilePermission> posixFilePermissions = null;
                 try {
-                    posixFilePermissions = Files.readAttributes(resourcePath, PosixFileAttributes.class)
-                            .permissions();
+                    if (attributes instanceof PosixFileAttributes) {
+                        posixFilePermissions = ((PosixFileAttributes) attributes).permissions();
+                    } else {
+                        posixFilePermissions = Files.readAttributes(resourcePath, PosixFileAttributes.class)
+                                .permissions();
+                    }
                 } catch (UnsupportedOperationException | IOException | SecurityException e) {
                     // POSIX attributes not supported
                 }
@@ -212,60 +225,36 @@ class ClasspathElementDir extends ClasspathElement {
 
             @Override
             public ByteBuffer read() throws IOException {
-                if (skipClasspathElement) {
-                    // Shouldn't happen
-                    throw new IOException("Parent directory could not be opened");
-                }
-                if (isOpen.getAndSet(true)) {
-                    throw new IOException(
-                            "Resource is already open -- cannot open it again without first calling close()");
-                }
-                pathSlice = new PathSlice(resourcePath, nestedJarHandler);
-                length = pathSlice.sliceLength;
+                checkSkipState();
+                openAndCreateSlice();
                 byteBuffer = pathSlice.read();
                 return byteBuffer;
             }
 
             @Override
             ClassfileReader openClassfile() throws IOException {
-                if (skipClasspathElement) {
-                    // Shouldn't happen
-                    throw new IOException("Parent directory could not be opened");
-                }
-                if (isOpen.getAndSet(true)) {
-                    throw new IOException(
-                            "Resource is already open -- cannot open it again without first calling close()");
-                }
+                checkSkipState();
                 // Classfile won't be compressed, so wrap it in a new PathSlice and then open it
-                pathSlice = new PathSlice(resourcePath, nestedJarHandler);
-                length = pathSlice.sliceLength;
+                openAndCreateSlice();
                 return new ClassfileReader(pathSlice, this);
             }
 
             @Override
             public InputStream open() throws IOException {
-                if (skipClasspathElement) {
-                    // Shouldn't happen
-                    throw new IOException("Parent directory could not be opened");
-                }
-                if (isOpen.getAndSet(true)) {
-                    throw new IOException(
-                            "Resource is already open -- cannot open it again without first calling close()");
-                }
-                pathSlice = new PathSlice(resourcePath, nestedJarHandler);
+                checkSkipState();
+                openAndCreateSlice();
                 inputStream = pathSlice.open(this);
-                length = pathSlice.sliceLength;
                 return inputStream;
             }
 
             @Override
             public byte[] load() throws IOException {
-                read();
-                try (Resource res = this) { // Close this after use
-                    pathSlice = new PathSlice(resourcePath, nestedJarHandler);
-                    final byte[] bytes = pathSlice.load();
-                    res.length = bytes.length;
-                    return bytes;
+                checkSkipState();
+                try {
+                    openAndCreateSlice();
+                    return pathSlice.load();
+                } finally {
+                    close();
                 }
             }
 
@@ -286,6 +275,22 @@ class ClasspathElementDir extends ClasspathElement {
                     super.close();
                 }
             }
+
+            private void checkSkipState() throws IOException {
+                if (skipClasspathElement) {
+                    // Shouldn't happen
+                    throw new IOException("Parent directory could not be opened");
+                }
+            }
+
+            private void openAndCreateSlice() throws IOException {
+                if (isOpen.getAndSet(true)) {
+                    throw new IOException(
+                            "Resource is already open -- cannot open it again without first calling close()");
+                }
+                pathSlice = new PathSlice(resourcePath, false, 0L, nestedJarHandler, false);
+                length = pathSlice.sliceLength;
+            }
         };
     }
 
@@ -300,7 +305,7 @@ class ClasspathElementDir extends ClasspathElement {
     @Override
     Resource getResource(final String relativePath) {
         final Path resourcePath = classpathEltPath.resolve(relativePath);
-        return FileUtils.canReadAndIsFile(resourcePath) ? newResource(resourcePath, nestedJarHandler) : null;
+        return FileUtils.canReadAndIsFile(resourcePath) ? newResource(resourcePath, null) : null;
     }
 
     /**
@@ -396,6 +401,7 @@ class ClasspathElementDir extends ClasspathElement {
             return;
         }
         Collections.sort(pathsInDir);
+        FileUtils.FileAttributesGetter getFileAttributes = FileUtils.createCachedAttributesGetter();
 
         // Determine whether this is a modular jar running under JRE 9+
         final boolean isModularJar = VersionFinder.JAVA_MAJOR_VERSION >= 9 && getModuleName() != null;
@@ -403,9 +409,11 @@ class ClasspathElementDir extends ClasspathElement {
         // Only scan files in directory if directory is not only an ancestor of an accepted path
         if (parentMatchStatus != ScanSpecPathMatch.ANCESTOR_OF_ACCEPTED_PATH) {
             // Do preorder traversal (files in dir, then subdirs), to reduce filesystem cache misses
-            for (final Path subPath : pathsInDir) {
+            for (final Path subPath : new ArrayList<>(pathsInDir)) {
                 // Process files in dir before recursing
-                if (Files.isRegularFile(subPath)) {
+                BasicFileAttributes fileAttributes = getFileAttributes.get(subPath);
+                if (fileAttributes.isRegularFile()) {
+                    pathsInDir.remove(subPath);
                     final Path subPathRelative = classpathEltPath.relativize(subPath);
                     final String subPathRelativeStr = FastPathResolver.resolve(subPathRelative.toString());
                     // If this is a modular jar, ignore all classfiles other than "module-info.class" in the
@@ -426,12 +434,12 @@ class ClasspathElementDir extends ClasspathElement {
                             || (parentMatchStatus == ScanSpecPathMatch.AT_ACCEPTED_CLASS_PACKAGE
                                     && scanSpec.classfileIsSpecificallyAccepted(subPathRelativeStr))) {
                         // Resource is accepted
-                        final Resource resource = newResource(subPath, nestedJarHandler);
+                        final Resource resource = newResource(subPath, fileAttributes);
                         addAcceptedResource(resource, parentMatchStatus, /* isClassfileOnly = */ false, subLog);
 
                         // Save last modified time
                         try {
-                            fileToLastModified.put(subPath.toFile(), subPath.toFile().lastModified());
+                            fileToLastModified.put(subPath.toFile(), fileAttributes.lastModifiedTime().toMillis());
                         } catch (final UnsupportedOperationException e) {
                             // Ignore
                         }
@@ -444,23 +452,27 @@ class ClasspathElementDir extends ClasspathElement {
             }
         } else if (scanSpec.enableClassInfo && dirRelativePathStr.equals("/")) {
             // Always check for module descriptor in package root, even if package root isn't in accept
-            for (final Path subPath : pathsInDir) {
-                if (subPath.getFileName().toString().equals("module-info.class") && Files.isRegularFile(subPath)) {
-                    final Resource resource = newResource(subPath, nestedJarHandler);
-                    addAcceptedResource(resource, parentMatchStatus, /* isClassfileOnly = */ true, subLog);
-                    try {
-                        fileToLastModified.put(subPath.toFile(), subPath.toFile().lastModified());
-                    } catch (final UnsupportedOperationException e) {
-                        // Ignore
+            for (final Path subPath : new ArrayList<>(pathsInDir)) {
+                if (subPath.getFileName().toString().equals("module-info.class")) {
+                    BasicFileAttributes fileAttributes = getFileAttributes.get(subPath);
+                    if (fileAttributes.isRegularFile()) {
+                        pathsInDir.remove(subPath);
+                        final Resource resource = newResource(subPath, fileAttributes);
+                        addAcceptedResource(resource, parentMatchStatus, /* isClassfileOnly = */ true, subLog);
+                        try {
+                            fileToLastModified.put(subPath.toFile(), fileAttributes.lastModifiedTime().toMillis());
+                        } catch (final UnsupportedOperationException e) {
+                            // Ignore
+                        }
+                        break;
                     }
-                    break;
                 }
             }
         }
         // Recurse into subdirectories
         for (final Path subPath : pathsInDir) {
             try {
-                if (Files.isDirectory(subPath)) {
+                if (FileUtils.isDir(subPath)) {
                     scanPathRecursively(subPath, subLog);
                 }
             } catch (final SecurityException e) {

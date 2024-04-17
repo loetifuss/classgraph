@@ -78,10 +78,6 @@ class PhysicalZipFile {
     PhysicalZipFile(final File file, final NestedJarHandler nestedJarHandler, final LogNode log)
             throws IOException {
         this.nestedJarHandler = nestedJarHandler;
-
-        // Make sure the File is readable and is a regular file
-        FileUtils.checkCanReadAndIsFile(file);
-
         this.file = file;
         this.pathStr = FastPathResolver.resolve(FileUtils.currDirPath(), file.getPath());
         this.slice = new FileSlice(file, nestedJarHandler, log);
@@ -102,10 +98,6 @@ class PhysicalZipFile {
     PhysicalZipFile(final Path path, final NestedJarHandler nestedJarHandler, final LogNode log)
             throws IOException {
         this.nestedJarHandler = nestedJarHandler;
-
-        // Make sure the File is readable and is a regular file
-        FileUtils.checkCanReadAndIsFile(path);
-
         this.path = path;
         this.pathStr = FastPathResolver.resolve(FileUtils.currDirPath(), path.toString());
         this.slice = new PathSlice(path, nestedJarHandler);

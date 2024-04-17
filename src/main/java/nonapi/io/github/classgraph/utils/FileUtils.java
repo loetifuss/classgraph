@@ -39,8 +39,12 @@ import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.nio.file.attribute.FileTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -301,13 +305,14 @@ public final class FileUtils {
      */
     public static boolean canRead(final Path path) {
         try {
-            if (!Files.isReadable(path)) {
-                return false;
-            }
+            return canRead(path.toFile());
+        } catch (UnsupportedOperationException ignored) {
+        }
+        try {
+            return Files.isReadable(path);
         } catch (final SecurityException e) {
             return false;
         }
-        return Files.isRegularFile(path);
     }
 
     /**
@@ -337,6 +342,10 @@ public final class FileUtils {
      */
     public static boolean canReadAndIsFile(final Path path) {
         try {
+            return canReadAndIsFile(path.toFile());
+        } catch (UnsupportedOperationException ignored) {
+        }
+        try {
             if (!Files.isReadable(path)) {
                 return false;
             }
@@ -344,6 +353,16 @@ public final class FileUtils {
             return false;
         }
         return Files.isRegularFile(path);
+    }
+
+    public static boolean isFile(final Path path) {
+        try {
+            return path.toFile().isFile();
+        } catch (UnsupportedOperationException e) {
+            return Files.isRegularFile(path);
+        } catch (SecurityException e) {
+            return false;
+        }
     }
 
     /**
@@ -376,6 +395,11 @@ public final class FileUtils {
      *             if the path does not exist, is not a regular file, or cannot be read.
      */
     public static void checkCanReadAndIsFile(final Path path) throws IOException {
+        try {
+            checkCanReadAndIsFile(path.toFile());
+            return;
+        } catch (UnsupportedOperationException ignored) {
+        }
         try {
             if (!Files.isReadable(path)) {
                 throw new FileNotFoundException("Path does not exist or cannot be read: " + path);
@@ -415,6 +439,10 @@ public final class FileUtils {
      */
     public static boolean canReadAndIsDir(final Path path) {
         try {
+            return canReadAndIsDir(path.toFile());
+        } catch (UnsupportedOperationException ignored) {
+        }
+        try {
             if (!Files.isReadable(path)) {
                 return false;
             }
@@ -422,6 +450,16 @@ public final class FileUtils {
             return false;
         }
         return Files.isDirectory(path);
+    }
+
+    public static boolean isDir(final Path path) {
+        try {
+            return path.toFile().isDirectory();
+        } catch (UnsupportedOperationException e) {
+            return Files.isDirectory(path);
+        } catch (SecurityException e) {
+            return false;
+        }
     }
 
     /**
@@ -694,5 +732,77 @@ public final class FileUtils {
             // Nothing to unmap
             return false;
         }
+    }
+
+    public static FileAttributesGetter createCachedAttributesGetter() {
+        final Map<Path, BasicFileAttributes> cache = new HashMap<>();
+        return new FileAttributesGetter() {
+            @Override
+            public BasicFileAttributes get(final Path path) {
+                BasicFileAttributes attributes = cache.get(path);
+                if (attributes == null) {
+                    attributes = readAttributes(path);
+                    cache.put(path, attributes);
+                }
+                return attributes;
+            }
+        };
+    }
+
+    public static BasicFileAttributes readAttributes(final Path path) {
+        try {
+            return Files.readAttributes(path, BasicFileAttributes.class);
+        } catch (IOException e) {
+            return new BasicFileAttributes() {
+                @Override
+                public FileTime lastModifiedTime() {
+                    return FileTime.fromMillis(path.toFile().lastModified());
+                }
+
+                @Override
+                public FileTime lastAccessTime() {
+                    throw new UnsupportedOperationException();
+                }
+
+                @Override
+                public FileTime creationTime() {
+                    return FileTime.fromMillis(0);
+                }
+
+                @Override
+                public boolean isRegularFile() {
+                    return FileUtils.isFile(path);
+                }
+
+                @Override
+                public boolean isDirectory() {
+                    return FileUtils.isDir(path);
+                }
+
+                @Override
+                public boolean isSymbolicLink() {
+                    return false;
+                }
+
+                @Override
+                public boolean isOther() {
+                    return !isRegularFile() && !isDirectory();
+                }
+
+                @Override
+                public long size() {
+                    return path.toFile().length();
+                }
+
+                @Override
+                public Object fileKey() {
+                    throw new UnsupportedOperationException();
+                }
+            };
+        }
+    }
+
+    public interface FileAttributesGetter {
+        BasicFileAttributes get(Path path);
     }
 }

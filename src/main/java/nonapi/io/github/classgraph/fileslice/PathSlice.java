@@ -112,10 +112,35 @@ public class PathSlice extends Slice {
      */
     public PathSlice(final Path path, final boolean isDeflatedZipEntry, final long inflatedLengthHint,
             final NestedJarHandler nestedJarHandler) throws IOException {
+        this(path, isDeflatedZipEntry, inflatedLengthHint, nestedJarHandler, true);
+    }
+
+    /**
+     * Constructor for toplevel file slice.
+     *
+     * @param path
+     *                           the path
+     * @param isDeflatedZipEntry
+     *                           true if this is a deflated zip entry
+     * @param inflatedLengthHint
+     *                           the uncompressed size of a deflated zip entry, or
+     *                           -1 if unknown, or 0 of this is not a deflated
+     *                           zip entry.
+     * @param nestedJarHandler
+     *                           the nested jar handler
+     * @param checkAccess
+     *                           whether it is needed to check read access and if it is a file
+     * @throws IOException
+     *                     if the file cannot be opened.
+     */
+    public PathSlice(final Path path, final boolean isDeflatedZipEntry, final long inflatedLengthHint,
+            final NestedJarHandler nestedJarHandler, boolean checkAccess) throws IOException {
         super(0L, isDeflatedZipEntry, inflatedLengthHint, nestedJarHandler);
 
-        // Make sure the File is readable and is a regular file
-        FileUtils.checkCanReadAndIsFile(path);
+        if (checkAccess) {
+            // Make sure the File is readable and is a regular file
+            FileUtils.checkCanReadAndIsFile(path);
+        }
 
         this.path = path;
         this.fileChannel = FileChannel.open(path, StandardOpenOption.READ);
