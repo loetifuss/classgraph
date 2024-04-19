@@ -472,7 +472,7 @@ class ClasspathElementDir extends ClasspathElement {
         // Recurse into subdirectories
         for (final Path subPath : pathsInDir) {
             try {
-                if (FileUtils.isDir(subPath)) {
+                if (getFileAttributes.get(subPath).isDirectory()) {
                     scanPathRecursively(subPath, subLog);
                 }
             } catch (final SecurityException e) {
