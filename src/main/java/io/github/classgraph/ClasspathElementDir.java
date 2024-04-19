@@ -43,6 +43,7 @@ import java.nio.file.attribute.PosixFilePermission;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -409,11 +410,13 @@ class ClasspathElementDir extends ClasspathElement {
         // Only scan files in directory if directory is not only an ancestor of an accepted path
         if (parentMatchStatus != ScanSpecPathMatch.ANCESTOR_OF_ACCEPTED_PATH) {
             // Do preorder traversal (files in dir, then subdirs), to reduce filesystem cache misses
-            for (final Path subPath : new ArrayList<>(pathsInDir)) {
+            final Iterator<Path> pathsIterator = pathsInDir.iterator();
+            while (pathsIterator.hasNext()) {
+                final Path subPath = pathsIterator.next();
                 // Process files in dir before recursing
                 BasicFileAttributes fileAttributes = getFileAttributes.get(subPath);
                 if (fileAttributes.isRegularFile()) {
-                    pathsInDir.remove(subPath);
+                    pathsIterator.remove();
                     final Path subPathRelative = classpathEltPath.relativize(subPath);
                     final String subPathRelativeStr = FastPathResolver.resolve(subPathRelative.toString());
                     // If this is a modular jar, ignore all classfiles other than "module-info.class" in the
@@ -452,11 +455,13 @@ class ClasspathElementDir extends ClasspathElement {
             }
         } else if (scanSpec.enableClassInfo && dirRelativePathStr.equals("/")) {
             // Always check for module descriptor in package root, even if package root isn't in accept
-            for (final Path subPath : new ArrayList<>(pathsInDir)) {
+            final Iterator<Path> pathsIterator = pathsInDir.iterator();
+            while (pathsIterator.hasNext()) {
+                final Path subPath = pathsIterator.next();
                 if (subPath.getFileName().toString().equals("module-info.class")) {
                     BasicFileAttributes fileAttributes = getFileAttributes.get(subPath);
                     if (fileAttributes.isRegularFile()) {
-                        pathsInDir.remove(subPath);
+                        pathsIterator.remove();
                         final Resource resource = newResource(subPath, fileAttributes);
                         addAcceptedResource(resource, parentMatchStatus, /* isClassfileOnly = */ true, subLog);
                         try {
@@ -472,7 +477,7 @@ class ClasspathElementDir extends ClasspathElement {
         // Recurse into subdirectories
         for (final Path subPath : pathsInDir) {
             try {
-                if (FileUtils.isDir(subPath)) {
+                if (getFileAttributes.get(subPath).isDirectory()) {
                     scanPathRecursively(subPath, subLog);
                 }
             } catch (final SecurityException e) {
