@@ -1554,6 +1554,16 @@ class Classfile {
                                     boundIndex = -1;
                                     formalParameterIndex = -1;
                                     throwsTypeIndex = -1;
+                                } else if (targetType == 0x10) {
+                                    // This target_type is not supposed to be added to methods, it is intended
+                                    // for ClassFile annotations, but Google's Java compiler adds annotations
+                                    // of this type to methods in guava for some reason. Just ignore these
+                                    // annotations. (#861)
+                                    reader.readUnsignedShort();
+                                    typeParameterIndex = -1;
+                                    boundIndex = -1;
+                                    formalParameterIndex = -1;
+                                    throwsTypeIndex = -1;
                                 } else if (targetType == 0x12) {
                                     // Type in bound of type parameter declaration of generic method
                                     // or constructor    
