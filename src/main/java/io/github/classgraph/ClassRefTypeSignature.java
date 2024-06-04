@@ -467,7 +467,7 @@ public final class ClassRefTypeSignature extends ClassRefOrTypeVariableSignature
         if (parser.peek() == 'L') {
             parser.next();
             final int startParserPosition = parser.getPosition();
-            if (!TypeUtils.getIdentifierToken(parser, /* stopAtDollarSign = */ true)) {
+            if (!TypeUtils.getIdentifierToken(parser, /* stopAtDollarSign = */ true, /* stopAtDot = */ true)) {
                 throw new ParseException(parser, "Could not parse identifier token");
             }
             String className = parser.currToken();
@@ -480,7 +480,8 @@ public final class ClassRefTypeSignature extends ClassRefOrTypeVariableSignature
                 suffixTypeArguments = new ArrayList<>();
                 while (parser.peek() == '.' || parser.peek() == '$') {
                     parser.advance(1);
-                    if (!TypeUtils.getIdentifierToken(parser, /* stopAtDollarSign = */ true)) {
+                    if (!TypeUtils.getIdentifierToken(parser, /* stopAtDollarSign = */ true,
+                            /* stopAtDot = */ true)) {
                         // Got the empty string as the next token after '$', i.e. found an empty suffix.
                         suffixes.add("");
                         suffixTypeArguments.add(Collections.<TypeArgument> emptyList());
