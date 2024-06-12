@@ -39,7 +39,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
-
 import nonapi.io.github.classgraph.classpath.ClassLoaderOrder;
 import nonapi.io.github.classgraph.classpath.ClasspathOrder;
 import nonapi.io.github.classgraph.scanspec.ScanSpec;
@@ -110,7 +109,7 @@ class JBossClassLoaderHandler implements ClassLoaderHandler {
 
         String path = loadJarPathFromClassicVFS(root, classpathOrderOut);
         if(!isPathExisting(path)) {
-            path = loadJarPathFromNewVFS(root, classpathOrderOut, classLoader);
+            path = loadJarPathFromNewVFS(root, classpathOrderOut);
         }
 
         if (path == null) {
@@ -151,13 +150,14 @@ class JBossClassLoaderHandler implements ClassLoaderHandler {
      *  <a href="https://issues.redhat.com/browse/JBEAP-25677">JBEAP-25677</a>
      * @param root The root object to get the JAR path from.
      * @param classpathOrderOut The ClasspathOrder object for updating the classpath order.
-     * @param classLoader The ClassLoader to use for loading the VFS class. Used as fallback if the current threads classloader
-     *                    does not have any dependency on jboss.vfs
      * @return The absolute path of the JAR file, or null if the path couldn't be found.
      */
-    private static String loadJarPathFromNewVFS(final Object root, final ClasspathOrder classpathOrderOut, final ClassLoader classLoader) {
-        Class<?> jbossVFS = getJBossVFSAccess(classLoader);
-        if (root == null || jbossVFS == null) return null;
+    private static String loadJarPathFromNewVFS(final Object root, final ClasspathOrder classpathOrderOut) {
+
+        if (root == null) return null;
+
+        Class<?> jbossVFS = getJBossVFSAccess(root);
+        if(jbossVFS == null) return null;
 
         // try to find the mount of the root. Type is org.jboss.vfs.VFS.Mount
         Object mount = classpathOrderOut.reflectionUtils.invokeStaticMethod(false, jbossVFS, "getMount",
@@ -178,31 +178,43 @@ class JBossClassLoaderHandler implements ClassLoaderHandler {
     }
 
     /**
-     * Get the access to the JBoss VFS class. Tries to load VFS first from the current threads classloader.
-     * If VFS can not be found in there, the provided classloader will be used to load VFS from.
+     * Get the access to the JBoss VFS class. Tries to load VFS first from the classloader of the provided root object
+     * if it's an object from org.jboss.vfs.
+     * If the root object is not from org.jboss.vfs, VFS will be tried to be loaded from the current thread class loader.
+     * It might be unnecessary to load VFS from the current thread context, because this means that the root object
+     * is not from org.jboss.vfs and VFS will not help here... but as a defensive approach we really try to get VFS
+     * access here.
      *
-     * @param classLoader The ClassLoader to use for loading the JBoss VFS class.
+     * @param root The root VirtualFile of JBoss VFS. Used to load the VFS via the classloader of the root. Can not be null.
      * @return The Class object representing the JBoss VFS class, or null if it couldn't be found.
      */
-    private static Class<?> getJBossVFSAccess(ClassLoader classLoader) {
+    private static Class<?> getJBossVFSAccess( final Object root) {
         Class<?> jbossVFS = null;
         // we need access to the class 'VFS' of org.jboss.vfs
         try {
-            // try to load JBoss VFS access from the current threads classloader
-            ClassLoader currentThreadClassLoarder = Thread.currentThread().getContextClassLoader();
-            jbossVFS = Class.forName("org.jboss.vfs.VFS", true, currentThreadClassLoarder);
-        } catch (ClassNotFoundException ex) {
-            // if the classloader before could not provide the VFS, try it in the provided class loader
-            // NOTE: maybe we can skip this, org.jboss.vfs is less likely to be in every class loader present.
-            // It's easier to ensure that it is in the current threads classloader where classgraph is called from?
+            if(root.getClass().getName().contains("org.jboss.vfs")) {
+                // first, try the classloader of the root object. Since the root object comes from org.jboss.vfs,
+                // it is likely that we can get access to org.jboss.vfs.VFS from this classloader
+                ClassLoader vfsRootClassloader= root.getClass().getClassLoader();
+                jbossVFS = loadJBossVFS(vfsRootClassloader);
+            }else {
+                // for non org.jboss.vfs objects, use the currentThread
+                jbossVFS = loadJBossVFS(Thread.currentThread().getContextClassLoader());
+            }
+        } catch (ClassNotFoundException e) {
             try {
-                jbossVFS = Class.forName("org.jboss.vfs.VFS", true, classLoader);
-            } catch (ClassNotFoundException e) {
+                // try to load JBoss VFS access from the current threads classloader since the previous method failed
+                // if the previous method was already the currentThreads classloader, it will fail again...
+                jbossVFS = loadJBossVFS(Thread.currentThread().getContextClassLoader());
+            } catch (ClassNotFoundException e1) {
                 // swallow the exception. If there is no VFS present, we can't do anything...
-                e.printStackTrace();
             }
         }
         return jbossVFS;
+    }
+
+    private static Class<?> loadJBossVFS(ClassLoader classLoader) throws ClassNotFoundException {
+        return Class.forName("org.jboss.vfs.VFS", true, classLoader);
     }
 
     /**
@@ -216,11 +228,10 @@ class JBossClassLoaderHandler implements ClassLoaderHandler {
      * @return The absolute path of the JAR file, or null if the path couldn't be found.
      */
     private static String loadJarPathFromClassicVFS(final Object root, final ClasspathOrder classpathOrderOut) {
-
+        String path = null;
         // type VirtualFile
         final File physicalFile = (File) classpathOrderOut.reflectionUtils.invokeMethod(false, root,
                 "getPhysicalFile");
-        String path = null;
         if (physicalFile != null) {
             final String name = (String) classpathOrderOut.reflectionUtils.invokeMethod(false, root, "getName");
             if (name != null) {
@@ -246,6 +257,7 @@ class JBossClassLoaderHandler implements ClassLoaderHandler {
                 }
             }
         }
+
         return path;
     }
 
