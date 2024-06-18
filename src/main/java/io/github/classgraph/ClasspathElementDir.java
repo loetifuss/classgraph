@@ -112,12 +112,14 @@ class ClasspathElementDir extends ClasspathElement {
                 final Path libDirPath = classpathEltPath.resolve(libDirPrefix);
                 if (FileUtils.canReadAndIsDir(libDirPath)) {
                     // Add all jarfiles within the lib dir as child classpath entries
-                    try (DirectoryStream<Path> stream = Files.newDirectoryStream(libDirPath, new DirectoryStream.Filter<Path>() {
-                        @Override
-                        public boolean accept(Path filePath) {
-                            return filePath.toString().toLowerCase().endsWith(".jar") && Files.isRegularFile(filePath);
-                        }
-                    })) {
+                    try (DirectoryStream<Path> stream = Files.newDirectoryStream(libDirPath,
+                            new DirectoryStream.Filter<Path>() {
+                                @Override
+                                public boolean accept(Path filePath) {
+                                    return filePath.toString().toLowerCase().endsWith(".jar")
+                                            && Files.isRegularFile(filePath);
+                                }
+                            })) {
                         for (final Path filePath : stream) {
                             if (log != null) {
                                 log(classpathElementIdx, "Found lib jar: " + filePath, log);
@@ -201,7 +203,8 @@ class ClasspathElementDir extends ClasspathElement {
             @Override
             public long getLastModified() {
                 try {
-                    return attributes == null ? resourcePath.toFile().lastModified() : attributes.lastModifiedTime().toMillis();
+                    return attributes == null ? resourcePath.toFile().lastModified()
+                            : attributes.lastModifiedTime().toMillis();
                 } catch (final UnsupportedOperationException e) {
                     return 0L;
                 }
@@ -402,7 +405,7 @@ class ClasspathElementDir extends ClasspathElement {
             return;
         }
         Collections.sort(pathsInDir);
-        FileUtils.FileAttributesGetter getFileAttributes = FileUtils.createCachedAttributesGetter();
+        final FileUtils.FileAttributesGetter getFileAttributes = FileUtils.createCachedAttributesGetter();
 
         // Determine whether this is a modular jar running under JRE 9+
         final boolean isModularJar = VersionFinder.JAVA_MAJOR_VERSION >= 9 && getModuleName() != null;
@@ -414,7 +417,7 @@ class ClasspathElementDir extends ClasspathElement {
             while (pathsIterator.hasNext()) {
                 final Path subPath = pathsIterator.next();
                 // Process files in dir before recursing
-                BasicFileAttributes fileAttributes = getFileAttributes.get(subPath);
+                final BasicFileAttributes fileAttributes = getFileAttributes.get(subPath);
                 if (fileAttributes.isRegularFile()) {
                     pathsIterator.remove();
                     final Path subPathRelative = classpathEltPath.relativize(subPath);
@@ -459,7 +462,7 @@ class ClasspathElementDir extends ClasspathElement {
             while (pathsIterator.hasNext()) {
                 final Path subPath = pathsIterator.next();
                 if (subPath.getFileName().toString().equals("module-info.class")) {
-                    BasicFileAttributes fileAttributes = getFileAttributes.get(subPath);
+                    final BasicFileAttributes fileAttributes = getFileAttributes.get(subPath);
                     if (fileAttributes.isRegularFile()) {
                         pathsIterator.remove();
                         final Resource resource = newResource(subPath, fileAttributes);

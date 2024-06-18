@@ -13,21 +13,22 @@ import io.github.classgraph.ScanResult;
 class Issue854Test {
     @Test
     void getFullyQualifiedClassName() {
-        ClassLoader mainClassLoader = Issue854Test.class.getClassLoader();
-        ScanResult scanResult = new ClassGraph().enableClassInfo().enableAnnotationInfo().ignoreClassVisibility()
-                .ignoreFieldVisibility().ignoreMethodVisibility().overrideClassLoaders(mainClassLoader)
-                .acceptPackages("com.google.common.collect").scan();
+        final ClassLoader mainClassLoader = Issue854Test.class.getClassLoader();
+        final ScanResult scanResult = new ClassGraph().enableClassInfo().enableAnnotationInfo()
+                .ignoreClassVisibility().ignoreFieldVisibility().ignoreMethodVisibility()
+                .overrideClassLoaders(mainClassLoader).acceptPackages("com.google.common.collect").scan();
 
-        String anonymousClass = "com.google.common.collect.TreeRangeMap$SubRangeMap$1";
-        ClassInfo classInfo = scanResult.getClassInfo(anonymousClass);
-        ClassRefTypeSignature signature = classInfo.getTypeSignatureOrTypeDescriptor().getSuperclassSignature();
+        final String anonymousClass = "com.google.common.collect.TreeRangeMap$SubRangeMap$1";
+        final ClassInfo classInfo = scanResult.getClassInfo(anonymousClass);
+        final ClassRefTypeSignature signature = classInfo.getTypeSignatureOrTypeDescriptor()
+                .getSuperclassSignature();
 
         // Before the fix to 854, this would give the following, because type parameter token parsing
         // did not stop at '.':
         // com.google.common.collect.TreeRangeMap$SubRangeMap.SubRangeMapAsMap
         // But the fully-qualified class name in the classfile is:
         // com.google.common.collect.TreeRangeMap$SubRangeMap$SubRangeMapAsMap
-        String subRangeMapAsMapClassName = signature.getFullyQualifiedClassName();
+        final String subRangeMapAsMapClassName = signature.getFullyQualifiedClassName();
         assertThat(subRangeMapAsMapClassName)
                 .isEqualTo("com.google.common.collect.TreeRangeMap$SubRangeMap$SubRangeMapAsMap");
         assertNotNull(scanResult.getClassInfo(subRangeMapAsMapClassName));

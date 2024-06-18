@@ -34,9 +34,7 @@ import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
-import java.nio.file.FileSystem;
 import java.nio.file.FileSystemNotFoundException;
-import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
@@ -555,7 +553,8 @@ class Scanner implements Callable<ScanResult> {
                         if (!FileUtils.canRead(path)) {
                             throw new IOException("Cannot read path: " + path);
                         } else {
-                            BasicFileAttributes attributes = Files.readAttributes(path, BasicFileAttributes.class);
+                            final BasicFileAttributes attributes = Files.readAttributes(path,
+                                    BasicFileAttributes.class);
                             if (attributes.isRegularFile()) {
                                 // classpathEntObj is a Path which points to a file, so it must be a jar
                                 isJar = true;

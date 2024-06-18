@@ -306,7 +306,7 @@ public final class FileUtils {
     public static boolean canRead(final Path path) {
         try {
             return canRead(path.toFile());
-        } catch (UnsupportedOperationException ignored) {
+        } catch (final UnsupportedOperationException ignored) {
         }
         try {
             return Files.isReadable(path);
@@ -343,7 +343,7 @@ public final class FileUtils {
     public static boolean canReadAndIsFile(final Path path) {
         try {
             return canReadAndIsFile(path.toFile());
-        } catch (UnsupportedOperationException ignored) {
+        } catch (final UnsupportedOperationException ignored) {
         }
         try {
             if (!Files.isReadable(path)) {
@@ -358,9 +358,9 @@ public final class FileUtils {
     public static boolean isFile(final Path path) {
         try {
             return path.toFile().isFile();
-        } catch (UnsupportedOperationException e) {
+        } catch (final UnsupportedOperationException e) {
             return Files.isRegularFile(path);
-        } catch (SecurityException e) {
+        } catch (final SecurityException e) {
             return false;
         }
     }
@@ -398,7 +398,7 @@ public final class FileUtils {
         try {
             checkCanReadAndIsFile(path.toFile());
             return;
-        } catch (UnsupportedOperationException ignored) {
+        } catch (final UnsupportedOperationException ignored) {
         }
         try {
             if (!Files.isReadable(path)) {
@@ -440,7 +440,7 @@ public final class FileUtils {
     public static boolean canReadAndIsDir(final Path path) {
         try {
             return canReadAndIsDir(path.toFile());
-        } catch (UnsupportedOperationException ignored) {
+        } catch (final UnsupportedOperationException ignored) {
         }
         try {
             if (!Files.isReadable(path)) {
@@ -455,9 +455,9 @@ public final class FileUtils {
     public static boolean isDir(final Path path) {
         try {
             return path.toFile().isDirectory();
-        } catch (UnsupportedOperationException e) {
+        } catch (final UnsupportedOperationException e) {
             return Files.isDirectory(path);
-        } catch (SecurityException e) {
+        } catch (final SecurityException e) {
             return false;
         }
     }
@@ -752,7 +752,7 @@ public final class FileUtils {
     public static BasicFileAttributes readAttributes(final Path path) {
         try {
             return Files.readAttributes(path, BasicFileAttributes.class);
-        } catch (IOException e) {
+        } catch (final IOException e) {
             return new BasicFileAttributes() {
                 @Override
                 public FileTime lastModifiedTime() {

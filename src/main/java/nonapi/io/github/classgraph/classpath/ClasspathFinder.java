@@ -136,8 +136,8 @@ public class ClasspathFinder {
                 // It's not possible to instantiate AppClassLoader or PlatformClassLoader, so if these are
                 // passed in as override classloaders, they must have been obtained using
                 // Thread.currentThread().getContextClassLoader() [.getParent()] or similar
-                if (!scanSpec.enableSystemJarsAndModules && classLoaderClassName
-                        .equals("jdk.internal.loader.ClassLoaders$PlatformClassLoader")) {
+                if (!scanSpec.enableSystemJarsAndModules
+                        && classLoaderClassName.equals("jdk.internal.loader.ClassLoaders$PlatformClassLoader")) {
                     if (classpathFinderLog != null) {
                         classpathFinderLog
                                 .log("overrideClassLoaders() was called with an instance of " + classLoaderClassName
