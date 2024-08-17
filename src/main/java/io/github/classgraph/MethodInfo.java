@@ -656,7 +656,12 @@ public class MethodInfo extends ClassMemberInfo implements Comparable<MethodInfo
      * 
      * @return The {@link Method} reference for this method.
      * @throws IllegalArgumentException
-     *             if the method does not exist, or if the method is a constructor.
+     *         <ul>
+     *             <li>If the method does not exist</li>
+     *             <li>If the method is a constructor</li>
+     *             <li>If one of the method's parameters references an unknown class</li>
+     *             <li>If the method's return type references an unknown class</li>
+     *         </ul>
      */
     public Method loadClassAndGetMethod() throws IllegalArgumentException {
         if (isConstructor()) {
@@ -671,7 +676,11 @@ public class MethodInfo extends ClassMemberInfo implements Comparable<MethodInfo
                 return loadClass().getDeclaredMethod(getName(), parameterClassesArr);
             } catch (final NoSuchMethodException es2) {
                 throw new IllegalArgumentException("Method not found: " + getClassName() + "." + getName());
+            } catch (final NoClassDefFoundError e3) { // If the method returns an unknown class, for example
+                throw new IllegalArgumentException("Could not load method: " + getClassName() + "." + getName(), e3);
             }
+        } catch (final NoClassDefFoundError e4) { // If the method returns an unknown class, for example
+            throw new IllegalArgumentException("Could not load method: " + getClassName() + "." + getName(), e4);
         }
     }
 
@@ -683,7 +692,11 @@ public class MethodInfo extends ClassMemberInfo implements Comparable<MethodInfo
      * 
      * @return The {@link Constructor} reference for this constructor.
      * @throws IllegalArgumentException
-     *             if the constructor does not exist, or if the method is not a constructor.
+     *         <ul>
+     *             <li>If the constructor does not exist</li>
+     *             <li>If the method is not a constructor</li>
+     *             <li>If one of the constructor's parameters references an unknown class</li>
+     *         </ul>
      */
     public Constructor<?> loadClassAndGetConstructor() throws IllegalArgumentException {
         if (!isConstructor()) {
