@@ -179,6 +179,12 @@ public class ClassInfo extends ScanResultObject implements Comparable<ClassInfo>
      */
     private transient List<ClassInfo> methodOverrideOrder;
 
+    /** The annotations, once they are loaded */
+    private ClassInfoList annotationsRef;
+
+    /** The annotation infos, once they are loaded */
+    private AnnotationInfoList annotationInfoRef;
+
     // -------------------------------------------------------------------------------------------------------------
 
     /** The modifier bit for annotations. */
@@ -1949,6 +1955,8 @@ public class ClassInfo extends ScanResultObject implements Comparable<ClassInfo>
      * @return the list of annotations and meta-annotations on this class.
      */
     public ClassInfoList getAnnotations() {
+        if (annotationsRef != null) return annotationsRef;
+
         if (!scanResult.scanSpec.enableAnnotationInfo) {
             throw new IllegalArgumentException("Please call ClassGraph#enableAnnotationInfo() before #scan()");
         }
@@ -1975,13 +1983,14 @@ public class ClassInfo extends ScanResultObject implements Comparable<ClassInfo>
 
         if (inheritedSuperclassAnnotations == null) {
             // No inherited superclass annotations
-            return new ClassInfoList(annotationClasses, /* sortByName = */ true);
+            annotationsRef = new ClassInfoList(annotationClasses, /* sortByName = */ true);
         } else {
             // Merge inherited superclass annotations and annotations on this class
             inheritedSuperclassAnnotations.addAll(annotationClasses.reachableClasses);
-            return new ClassInfoList(inheritedSuperclassAnnotations, annotationClasses.directlyRelatedClasses,
+            annotationsRef = new ClassInfoList(inheritedSuperclassAnnotations, annotationClasses.directlyRelatedClasses,
                     /* sortByName = */ true);
         }
+        return annotationsRef;
     }
 
     /**
@@ -2064,10 +2073,14 @@ public class ClassInfo extends ScanResultObject implements Comparable<ClassInfo>
      *         none.
      */
     public AnnotationInfoList getAnnotationInfo() {
+        if (annotationInfoRef != null) return annotationInfoRef;
+
         if (!scanResult.scanSpec.enableAnnotationInfo) {
             throw new IllegalArgumentException("Please call ClassGraph#enableAnnotationInfo() before #scan()");
         }
-        return AnnotationInfoList.getIndirectAnnotations(annotationInfo, this);
+
+        annotationInfoRef = AnnotationInfoList.getIndirectAnnotations(annotationInfo, this);
+        return annotationInfoRef;
     }
 
     /**
