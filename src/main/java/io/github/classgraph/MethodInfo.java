@@ -676,11 +676,7 @@ public class MethodInfo extends ClassMemberInfo implements Comparable<MethodInfo
                 return loadClass().getDeclaredMethod(getName(), parameterClassesArr);
             } catch (final NoSuchMethodException es2) {
                 throw new IllegalArgumentException("Method not found: " + getClassName() + "." + getName());
-            } catch (final NoClassDefFoundError e3) { // If the method returns an unknown class, for example
-                throw new IllegalArgumentException("Could not load method: " + getClassName() + "." + getName(), e3);
             }
-        } catch (final NoClassDefFoundError e4) { // If the method returns an unknown class, for example
-            throw new IllegalArgumentException("Could not load method: " + getClassName() + "." + getName(), e4);
         }
     }
 

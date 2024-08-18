@@ -172,16 +172,14 @@ abstract class ScanResultObject {
     <T> Class<T> loadClass(final Class<T> superclassOrInterfaceType, final boolean ignoreExceptions) {
         if (classRef == null) {
             final String className = getClassInfoNameOrClassName();
-            if (scanResult != null) {
-                classRef = scanResult.loadClass(className, superclassOrInterfaceType, ignoreExceptions);
-            } else {
-                // Fallback, if scanResult is not set
-                try {
-                    classRef = Class.forName(className);
-                } catch (final Throwable t) {
-                    if (!ignoreExceptions) {
-                        throw new IllegalArgumentException("Could not load class " + className, t);
-                    }
+            try {
+                classRef = scanResult != null
+                        ? scanResult.loadClass(className, superclassOrInterfaceType, ignoreExceptions)
+                        // Fallback, if scanResult is not set
+                        : Class.forName(className);
+            } catch (final Throwable t) {
+                if (!ignoreExceptions) {
+                    throw new IllegalArgumentException("Could not load class " + className, t);
                 }
             }
         }
