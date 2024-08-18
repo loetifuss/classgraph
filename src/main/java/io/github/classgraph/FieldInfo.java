@@ -253,7 +253,7 @@ public class FieldInfo extends ClassMemberInfo implements Comparable<FieldInfo> 
      * 
      * @return The {@link Field} reference for this field.
      * @throws IllegalArgumentException
-     *             if the field does not exist.
+     *             if the class can't be loaded or the field does not exist.
      */
     public Field loadClassAndGetField() throws IllegalArgumentException {
         try {

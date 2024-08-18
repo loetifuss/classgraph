@@ -657,6 +657,7 @@ public class MethodInfo extends ClassMemberInfo implements Comparable<MethodInfo
      * @return The {@link Method} reference for this method.
      * @throws IllegalArgumentException
      *         <ul>
+     *             <li>If the method's class can't be loaded</li>
      *             <li>If the method does not exist</li>
      *             <li>If the method is a constructor</li>
      *             <li>If one of the method's parameters references an unknown class</li>
@@ -689,6 +690,7 @@ public class MethodInfo extends ClassMemberInfo implements Comparable<MethodInfo
      * @return The {@link Constructor} reference for this constructor.
      * @throws IllegalArgumentException
      *         <ul>
+     *             <li>If the method's class can't be loaded</li>
      *             <li>If the constructor does not exist</li>
      *             <li>If the method is not a constructor</li>
      *             <li>If one of the constructor's parameters references an unknown class</li>
