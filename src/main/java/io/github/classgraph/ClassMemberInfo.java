@@ -63,6 +63,9 @@ public abstract class ClassMemberInfo extends ScanResultObject implements HasNam
     /** The annotation on the class member, if any. */
     protected AnnotationInfoList annotationInfo;
 
+    /** The annotation infos, once they are loaded */
+    private AnnotationInfoList annotationInfoRef;
+
     /** Default constructor for deserialization. */
     ClassMemberInfo() {
         super();
@@ -283,11 +286,15 @@ public abstract class ClassMemberInfo extends ScanResultObject implements HasNam
      *         {@link AnnotationInfo} objects, or the empty list if none.
      */
     public AnnotationInfoList getAnnotationInfo() {
+        if (annotationInfoRef != null) return annotationInfoRef;
+
         if (!scanResult.scanSpec.enableAnnotationInfo) {
             throw new IllegalArgumentException("Please call ClassGraph#enableAnnotationInfo() before #scan()");
         }
-        return annotationInfo == null ? AnnotationInfoList.EMPTY_LIST
+
+        annotationInfoRef = annotationInfo == null ? AnnotationInfoList.EMPTY_LIST
                 : AnnotationInfoList.getIndirectAnnotations(annotationInfo, /* annotatedClass = */ null);
+        return annotationInfoRef;
     }
 
     /**
