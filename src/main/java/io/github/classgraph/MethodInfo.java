@@ -656,13 +656,13 @@ public class MethodInfo extends ClassMemberInfo implements Comparable<MethodInfo
      * 
      * @return The {@link Method} reference for this method.
      * @throws IllegalArgumentException
-     *         <ul>
+     *             <ul>
      *             <li>If the method's class can't be loaded</li>
      *             <li>If the method does not exist</li>
      *             <li>If the method is a constructor</li>
      *             <li>If one of the method's parameters references an unknown class</li>
      *             <li>If the method's return type references an unknown class</li>
-     *         </ul>
+     *             </ul>
      */
     public Method loadClassAndGetMethod() throws IllegalArgumentException {
         if (isConstructor()) {
@@ -675,9 +675,12 @@ public class MethodInfo extends ClassMemberInfo implements Comparable<MethodInfo
         } catch (final NoSuchMethodException e1) {
             try {
                 return loadClass().getDeclaredMethod(getName(), parameterClassesArr);
-            } catch (final NoSuchMethodException es2) {
+            } catch (final NoSuchMethodException e2) {
                 throw new IllegalArgumentException("Method not found: " + getClassName() + "." + getName());
             }
+        } catch (final NoClassDefFoundError e3) {
+            // The method returns an unknown class
+            throw new IllegalArgumentException("Could not load method: " + getClassName() + "." + getName(), e3);
         }
     }
 
@@ -689,12 +692,12 @@ public class MethodInfo extends ClassMemberInfo implements Comparable<MethodInfo
      * 
      * @return The {@link Constructor} reference for this constructor.
      * @throws IllegalArgumentException
-     *         <ul>
+     *             <ul>
      *             <li>If the method's class can't be loaded</li>
      *             <li>If the constructor does not exist</li>
      *             <li>If the method is not a constructor</li>
      *             <li>If one of the constructor's parameters references an unknown class</li>
-     *         </ul>
+     *             </ul>
      */
     public Constructor<?> loadClassAndGetConstructor() throws IllegalArgumentException {
         if (!isConstructor()) {
@@ -708,9 +711,12 @@ public class MethodInfo extends ClassMemberInfo implements Comparable<MethodInfo
         } catch (final NoSuchMethodException e1) {
             try {
                 return loadClass().getDeclaredConstructor(parameterClassesArr);
-            } catch (final NoSuchMethodException es2) {
+            } catch (final NoSuchMethodException e2) {
                 throw new IllegalArgumentException("Constructor not found for class " + getClassName());
             }
+        } catch (final NoClassDefFoundError e3) {
+            // The method returns an unknown class
+            throw new IllegalArgumentException("Could not load method: " + getClassName() + "." + getName(), e3);
         }
     }
 
