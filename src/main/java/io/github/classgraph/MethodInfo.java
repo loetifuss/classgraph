@@ -714,9 +714,6 @@ public class MethodInfo extends ClassMemberInfo implements Comparable<MethodInfo
             } catch (final NoSuchMethodException e2) {
                 throw new IllegalArgumentException("Constructor not found for class " + getClassName());
             }
-        } catch (final NoClassDefFoundError e3) {
-            // The method returns an unknown class
-            throw new IllegalArgumentException("Could not load method: " + getClassName() + "." + getName(), e3);
         }
     }
 
