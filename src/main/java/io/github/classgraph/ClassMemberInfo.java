@@ -286,15 +286,18 @@ public abstract class ClassMemberInfo extends ScanResultObject implements HasNam
      *         {@link AnnotationInfo} objects, or the empty list if none.
      */
     public AnnotationInfoList getAnnotationInfo() {
-        if (annotationInfoRef != null) return annotationInfoRef;
+        synchronized (this) {
+            if (annotationInfoRef != null)
+                return annotationInfoRef;
 
-        if (!scanResult.scanSpec.enableAnnotationInfo) {
-            throw new IllegalArgumentException("Please call ClassGraph#enableAnnotationInfo() before #scan()");
+            if (!scanResult.scanSpec.enableAnnotationInfo) {
+                throw new IllegalArgumentException("Please call ClassGraph#enableAnnotationInfo() before #scan()");
+            }
+
+            annotationInfoRef = annotationInfo == null ? AnnotationInfoList.EMPTY_LIST
+                    : AnnotationInfoList.getIndirectAnnotations(annotationInfo, /* annotatedClass = */ null);
+            return annotationInfoRef;
         }
-
-        annotationInfoRef = annotationInfo == null ? AnnotationInfoList.EMPTY_LIST
-                : AnnotationInfoList.getIndirectAnnotations(annotationInfo, /* annotatedClass = */ null);
-        return annotationInfoRef;
     }
 
     /**

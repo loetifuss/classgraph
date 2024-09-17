@@ -148,23 +148,25 @@ public class FieldInfo extends ClassMemberInfo implements Comparable<FieldInfo> 
      */
     @Override
     public TypeSignature getTypeDescriptor() {
-        if (typeDescriptorStr == null) {
-            return null;
-        }
-        if (typeDescriptor == null) {
-            try {
-                typeDescriptor = TypeSignature.parse(typeDescriptorStr, declaringClassName);
-                typeDescriptor.setScanResult(scanResult);
-                if (typeAnnotationDecorators != null) {
-                    for (final TypeAnnotationDecorator decorator : typeAnnotationDecorators) {
-                        decorator.decorate(typeDescriptor);
-                    }
-                }
-            } catch (final ParseException e) {
-                throw new IllegalArgumentException(e);
+        synchronized (this) {
+            if (typeDescriptorStr == null) {
+                return null;
             }
+            if (typeDescriptor == null) {
+                try {
+                    typeDescriptor = TypeSignature.parse(typeDescriptorStr, declaringClassName);
+                    typeDescriptor.setScanResult(scanResult);
+                    if (typeAnnotationDecorators != null) {
+                        for (final TypeAnnotationDecorator decorator : typeAnnotationDecorators) {
+                            decorator.decorate(typeDescriptor);
+                        }
+                    }
+                } catch (final ParseException e) {
+                    throw new IllegalArgumentException(e);
+                }
+            }
+            return typeDescriptor;
         }
-        return typeDescriptor;
     }
 
     /**
@@ -180,29 +182,31 @@ public class FieldInfo extends ClassMemberInfo implements Comparable<FieldInfo> 
      */
     @Override
     public TypeSignature getTypeSignature() {
-        if (typeSignatureStr == null) {
-            return null;
-        }
-        if (typeSignature == null) {
-            try {
-                typeSignature = TypeSignature.parse(typeSignatureStr, declaringClassName);
-                typeSignature.setScanResult(scanResult);
-                if (typeAnnotationDecorators != null) {
-                    for (final TypeAnnotationDecorator decorator : typeAnnotationDecorators) {
-                        decorator.decorate(typeSignature);
-                    }
-                }
-            } catch (final ParseException e) {
-                throw new IllegalArgumentException(
-                        "Invalid type signature for field " + getClassName() + "." + getName()
-                                + (getClassInfo() != null
-                                        ? " in classpath element " + getClassInfo().getClasspathElementURI()
-                                        : "")
-                                + " : " + typeSignatureStr,
-                        e);
+        synchronized (this) {
+            if (typeSignatureStr == null) {
+                return null;
             }
+            if (typeSignature == null) {
+                try {
+                    typeSignature = TypeSignature.parse(typeSignatureStr, declaringClassName);
+                    typeSignature.setScanResult(scanResult);
+                    if (typeAnnotationDecorators != null) {
+                        for (final TypeAnnotationDecorator decorator : typeAnnotationDecorators) {
+                            decorator.decorate(typeSignature);
+                        }
+                    }
+                } catch (final ParseException e) {
+                    throw new IllegalArgumentException(
+                            "Invalid type signature for field " + getClassName() + "." + getName()
+                                    + (getClassInfo() != null
+                                            ? " in classpath element " + getClassInfo().getClasspathElementURI()
+                                            : "")
+                                    + " : " + typeSignatureStr,
+                            e);
+                }
+            }
+            return typeSignature;
         }
-        return typeSignature;
     }
 
     /**

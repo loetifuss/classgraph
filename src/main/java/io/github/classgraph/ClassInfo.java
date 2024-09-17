@@ -1955,42 +1955,46 @@ public class ClassInfo extends ScanResultObject implements Comparable<ClassInfo>
      * @return the list of annotations and meta-annotations on this class.
      */
     public ClassInfoList getAnnotations() {
-        if (annotationsRef != null) return annotationsRef;
+        synchronized (this) {
+            if (annotationsRef != null) {
+                return annotationsRef;
+            }
 
-        if (!scanResult.scanSpec.enableAnnotationInfo) {
-            throw new IllegalArgumentException("Please call ClassGraph#enableAnnotationInfo() before #scan()");
-        }
+            if (!scanResult.scanSpec.enableAnnotationInfo) {
+                throw new IllegalArgumentException("Please call ClassGraph#enableAnnotationInfo() before #scan()");
+            }
 
-        // Get all annotations on this class
-        final ReachableAndDirectlyRelatedClasses annotationClasses = this.filterClassInfo(RelType.CLASS_ANNOTATIONS,
-                /* strictAccept = */ false);
-        // Check for any @Inherited annotations on superclasses
-        Set<ClassInfo> inheritedSuperclassAnnotations = null;
-        for (final ClassInfo superclass : getSuperclasses()) {
-            for (final ClassInfo superclassAnnotation : superclass.filterClassInfo(RelType.CLASS_ANNOTATIONS,
-                    /* strictAccept = */ false).reachableClasses) {
-                // Check if any of the meta-annotations on this annotation are @Inherited,
-                // which causes an annotation to annotate a class and all of its subclasses.
-                if (superclassAnnotation != null && superclassAnnotation.isInherited) {
-                    // superclassAnnotation has an @Inherited meta-annotation
-                    if (inheritedSuperclassAnnotations == null) {
-                        inheritedSuperclassAnnotations = new LinkedHashSet<>();
+            // Get all annotations on this class
+            final ReachableAndDirectlyRelatedClasses annotationClasses = this
+                    .filterClassInfo(RelType.CLASS_ANNOTATIONS, /* strictAccept = */ false);
+            // Check for any @Inherited annotations on superclasses
+            Set<ClassInfo> inheritedSuperclassAnnotations = null;
+            for (final ClassInfo superclass : getSuperclasses()) {
+                for (final ClassInfo superclassAnnotation : superclass.filterClassInfo(RelType.CLASS_ANNOTATIONS,
+                        /* strictAccept = */ false).reachableClasses) {
+                    // Check if any of the meta-annotations on this annotation are @Inherited,
+                    // which causes an annotation to annotate a class and all of its subclasses.
+                    if (superclassAnnotation != null && superclassAnnotation.isInherited) {
+                        // superclassAnnotation has an @Inherited meta-annotation
+                        if (inheritedSuperclassAnnotations == null) {
+                            inheritedSuperclassAnnotations = new LinkedHashSet<>();
+                        }
+                        inheritedSuperclassAnnotations.add(superclassAnnotation);
                     }
-                    inheritedSuperclassAnnotations.add(superclassAnnotation);
                 }
             }
-        }
 
-        if (inheritedSuperclassAnnotations == null) {
-            // No inherited superclass annotations
-            annotationsRef = new ClassInfoList(annotationClasses, /* sortByName = */ true);
-        } else {
-            // Merge inherited superclass annotations and annotations on this class
-            inheritedSuperclassAnnotations.addAll(annotationClasses.reachableClasses);
-            annotationsRef = new ClassInfoList(inheritedSuperclassAnnotations, annotationClasses.directlyRelatedClasses,
-                    /* sortByName = */ true);
+            if (inheritedSuperclassAnnotations == null) {
+                // No inherited superclass annotations
+                annotationsRef = new ClassInfoList(annotationClasses, /* sortByName = */ true);
+            } else {
+                // Merge inherited superclass annotations and annotations on this class
+                inheritedSuperclassAnnotations.addAll(annotationClasses.reachableClasses);
+                annotationsRef = new ClassInfoList(inheritedSuperclassAnnotations,
+                        annotationClasses.directlyRelatedClasses, /* sortByName = */ true);
+            }
+            return annotationsRef;
         }
-        return annotationsRef;
     }
 
     /**
@@ -2073,14 +2077,18 @@ public class ClassInfo extends ScanResultObject implements Comparable<ClassInfo>
      *         none.
      */
     public AnnotationInfoList getAnnotationInfo() {
-        if (annotationInfoRef != null) return annotationInfoRef;
+        synchronized (this) {
+            if (annotationInfoRef != null) {
+                return annotationInfoRef;
+            }
 
-        if (!scanResult.scanSpec.enableAnnotationInfo) {
-            throw new IllegalArgumentException("Please call ClassGraph#enableAnnotationInfo() before #scan()");
+            if (!scanResult.scanSpec.enableAnnotationInfo) {
+                throw new IllegalArgumentException("Please call ClassGraph#enableAnnotationInfo() before #scan()");
+            }
+
+            annotationInfoRef = AnnotationInfoList.getIndirectAnnotations(annotationInfo, this);
+            return annotationInfoRef;
         }
-
-        annotationInfoRef = AnnotationInfoList.getIndirectAnnotations(annotationInfo, this);
-        return annotationInfoRef;
     }
 
     /**
@@ -2186,14 +2194,16 @@ public class ClassInfo extends ScanResultObject implements Comparable<ClassInfo>
         if (!isAnnotation()) {
             throw new IllegalArgumentException("Class is not an annotation: " + getName());
         }
-        if (annotationDefaultParamValues == null) {
-            return AnnotationParameterValueList.EMPTY_LIST;
+        synchronized (this) {
+            if (annotationDefaultParamValues == null) {
+                return AnnotationParameterValueList.EMPTY_LIST;
+            }
+            if (!annotationDefaultParamValuesHasBeenConvertedToPrimitive) {
+                annotationDefaultParamValues.convertWrapperArraysToPrimitiveArrays(this);
+                annotationDefaultParamValuesHasBeenConvertedToPrimitive = true;
+            }
+            return annotationDefaultParamValues;
         }
-        if (!annotationDefaultParamValuesHasBeenConvertedToPrimitive) {
-            annotationDefaultParamValues.convertWrapperArraysToPrimitiveArrays(this);
-            annotationDefaultParamValuesHasBeenConvertedToPrimitive = true;
-        }
-        return annotationDefaultParamValues;
     }
 
     /**
@@ -2955,21 +2965,23 @@ public class ClassInfo extends ScanResultObject implements Comparable<ClassInfo>
      *             classfile).
      */
     public ClassTypeSignature getTypeSignature() {
-        if (typeSignatureStr == null) {
-            return null;
-        }
-        if (typeSignature == null) {
-            try {
-                typeSignature = ClassTypeSignature.parse(typeSignatureStr, this);
-                typeSignature.setScanResult(scanResult);
-                if (typeAnnotationDecorators != null) {
-                    for (final ClassTypeAnnotationDecorator decorator : typeAnnotationDecorators) {
-                        decorator.decorate(typeSignature);
+        synchronized (this) {
+            if (typeSignatureStr == null) {
+                return null;
+            }
+            if (typeSignature == null) {
+                try {
+                    typeSignature = ClassTypeSignature.parse(typeSignatureStr, this);
+                    typeSignature.setScanResult(scanResult);
+                    if (typeAnnotationDecorators != null) {
+                        for (final ClassTypeAnnotationDecorator decorator : typeAnnotationDecorators) {
+                            decorator.decorate(typeSignature);
+                        }
                     }
+                } catch (final ParseException e) {
+                    throw new IllegalArgumentException("Invalid type signature for class " + getName()
+                            + " in classpath element " + getClasspathElementURI() + " : " + typeSignatureStr, e);
                 }
-            } catch (final ParseException e) {
-                throw new IllegalArgumentException("Invalid type signature for class " + getName()
-                        + " in classpath element " + getClasspathElementURI() + " : " + typeSignatureStr, e);
             }
         }
         return typeSignature;
@@ -3014,12 +3026,14 @@ public class ClassInfo extends ScanResultObject implements Comparable<ClassInfo>
      * @return The synthetic type descriptor for the class.
      */
     public ClassTypeSignature getTypeDescriptor() {
-        if (typeDescriptor == null) {
-            typeDescriptor = new ClassTypeSignature(this, getSuperclass(), getInterfaces());
-            typeDescriptor.setScanResult(scanResult);
-            if (typeAnnotationDecorators != null) {
-                for (final ClassTypeAnnotationDecorator decorator : typeAnnotationDecorators) {
-                    decorator.decorate(typeDescriptor);
+        synchronized (this) {
+            if (typeDescriptor == null) {
+                typeDescriptor = new ClassTypeSignature(this, getSuperclass(), getInterfaces());
+                typeDescriptor.setScanResult(scanResult);
+                if (typeAnnotationDecorators != null) {
+                    for (final ClassTypeAnnotationDecorator decorator : typeAnnotationDecorators) {
+                        decorator.decorate(typeDescriptor);
+                    }
                 }
             }
         }

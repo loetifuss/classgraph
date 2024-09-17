@@ -170,26 +170,28 @@ abstract class ScanResultObject {
      *             if the class could not be loaded or cast, and ignoreExceptions was false.
      */
     <T> Class<T> loadClass(final Class<T> superclassOrInterfaceType, final boolean ignoreExceptions) {
-        // If class is not already loaded, try loading class
-        if (classRef == null) {
-            final String className = getClassInfoNameOrClassName();
-            try {
-                classRef = scanResult != null
-                        ? scanResult.loadClass(className, superclassOrInterfaceType, ignoreExceptions)
-                        // Fallback, if scanResult is not set
-                        : Class.forName(className);
-                if (classRef == null && !ignoreExceptions) {
-                    throw new IllegalArgumentException("Could not load class " + className);
-                }
-            } catch (final Throwable t) {
-                if (!ignoreExceptions) {
-                    throw new IllegalArgumentException("Could not load class " + className, t);
+        synchronized (this) {
+            // If class is not already loaded, try loading class
+            if (classRef == null) {
+                final String className = getClassInfoNameOrClassName();
+                try {
+                    classRef = scanResult != null
+                            ? scanResult.loadClass(className, superclassOrInterfaceType, ignoreExceptions)
+                            // Fallback, if scanResult is not set
+                            : Class.forName(className);
+                    if (classRef == null && !ignoreExceptions) {
+                        throw new IllegalArgumentException("Could not load class " + className);
+                    }
+                } catch (final Throwable t) {
+                    if (!ignoreExceptions) {
+                        throw new IllegalArgumentException("Could not load class " + className, t);
+                    }
                 }
             }
+            @SuppressWarnings("unchecked")
+            final Class<T> classT = (Class<T>) classRef;
+            return classT;
         }
-        @SuppressWarnings("unchecked")
-        final Class<T> classT = (Class<T>) classRef;
-        return classT;
     }
 
     /**

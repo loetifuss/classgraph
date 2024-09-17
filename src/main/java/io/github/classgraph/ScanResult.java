@@ -481,16 +481,18 @@ public final class ScanResult implements Closeable {
      * @return A list of all resources (including classfiles and non-classfiles) found in accepted packages.
      */
     public ResourceList getAllResources() {
-        if (allAcceptedResourcesCached == null) {
-            // Index Resource objects by path
-            final ResourceList acceptedResourcesList = new ResourceList();
-            for (final ClasspathElement classpathElt : classpathOrder) {
-                acceptedResourcesList.addAll(classpathElt.acceptedResources);
+        synchronized (this) {
+            if (allAcceptedResourcesCached == null) {
+                // Index Resource objects by path
+                final ResourceList acceptedResourcesList = new ResourceList();
+                for (final ClasspathElement classpathElt : classpathOrder) {
+                    acceptedResourcesList.addAll(classpathElt.acceptedResources);
+                }
+                // Set atomically for thread safety
+                allAcceptedResourcesCached = acceptedResourcesList;
             }
-            // Set atomically for thread safety
-            allAcceptedResourcesCached = acceptedResourcesList;
+            return allAcceptedResourcesCached;
         }
-        return allAcceptedResourcesCached;
     }
 
     /**
@@ -501,19 +503,21 @@ public final class ScanResult implements Closeable {
      *         non-classfiles) found in accepted packages.
      */
     public Map<String, ResourceList> getAllResourcesAsMap() {
-        if (pathToAcceptedResourcesCached == null) {
-            final Map<String, ResourceList> pathToAcceptedResourceListMap = new HashMap<>();
-            for (final Resource res : getAllResources()) {
-                ResourceList resList = pathToAcceptedResourceListMap.get(res.getPath());
-                if (resList == null) {
-                    pathToAcceptedResourceListMap.put(res.getPath(), resList = new ResourceList());
+        synchronized (this) {
+            if (pathToAcceptedResourcesCached == null) {
+                final Map<String, ResourceList> pathToAcceptedResourceListMap = new HashMap<>();
+                for (final Resource res : getAllResources()) {
+                    ResourceList resList = pathToAcceptedResourceListMap.get(res.getPath());
+                    if (resList == null) {
+                        pathToAcceptedResourceListMap.put(res.getPath(), resList = new ResourceList());
+                    }
+                    resList.add(res);
                 }
-                resList.add(res);
+                // Set atomically for thread safety
+                pathToAcceptedResourcesCached = pathToAcceptedResourceListMap;
             }
-            // Set atomically for thread safety
-            pathToAcceptedResourcesCached = pathToAcceptedResourceListMap;
+            return pathToAcceptedResourcesCached;
         }
-        return pathToAcceptedResourcesCached;
     }
 
     /**
