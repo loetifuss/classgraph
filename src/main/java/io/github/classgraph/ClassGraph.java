@@ -355,6 +355,26 @@ public class ClassGraph {
         return this;
     }
 
+    /**
+     * Enables the determination of accessible inter-class dependencies, which may be read by calling
+     * {@link ClassInfo#getClassDependencies()}, {@link ScanResult#getClassDependencyMap()} or
+     * {@link ScanResult#getReverseClassDependencyMap()}.
+     * This mode only returns accessible dependencies i.e. private fields, methods or classes are ignored.
+     * (Automatically calls {@link #enableClassInfo()}, {@link #enableFieldInfo()}, {@link #enableMethodInfo()} 
+     * and {@link #enableAnnotationInfo()}.)
+     *
+     * @return this (for method chaining).
+     */
+    public ClassGraph enableAcessibleInterClassDependencies() {
+        enableClassInfo();
+        enableFieldInfo();
+        enableMethodInfo();
+        enableAnnotationInfo();
+        scanSpec.enableInterClassDependencies = true;
+        return this;
+    }
+
+    
     // -------------------------------------------------------------------------------------------------------------
 
     /**
