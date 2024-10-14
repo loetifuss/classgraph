@@ -155,11 +155,17 @@ public class ScanSpec {
      * If true, ignore field visibility. If false, fields must be public to be scanned.
      */
     public boolean ignoreFieldVisibility;
-
+    
     /**
      * If true, ignore method visibility. If false, methods must be public to be scanned.
      */
     public boolean ignoreMethodVisibility;
+
+    public boolean enableClassAccessibility;
+    
+    public boolean enableFieldAccessibility;
+    
+    public boolean enableMethodAccessibility;
 
     /**
      * If true, don't scan runtime-invisible annotations (only scan annotations with RetentionPolicy.RUNTIME).

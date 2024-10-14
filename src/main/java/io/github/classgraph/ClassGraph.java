@@ -371,6 +371,9 @@ public class ClassGraph {
         enableMethodInfo();
         enableAnnotationInfo();
         scanSpec.enableInterClassDependencies = true;
+        scanSpec.enableClassAccessibility = true;
+        scanSpec.enableMethodAccessibility = true;
+        scanSpec.enableFieldAccessibility = true;
         return this;
     }
 

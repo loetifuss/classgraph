@@ -30,6 +30,7 @@ package io.github.classgraph;
 
 import java.io.IOException;
 import java.lang.reflect.Array;
+import java.lang.reflect.Member;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -1269,7 +1270,10 @@ class Classfile {
         final boolean isModule = (classModifiers & 0x8000) != 0; // Equivalently filename is "module-info.class"
         final boolean isPackage = relativePath.regionMatches(relativePath.lastIndexOf('/') + 1,
                 "package-info.class", 0, 18);
-        if (!scanSpec.ignoreClassVisibility && !Modifier.isPublic(classModifiers) && !isModule && !isPackage) {
+        final boolean classIsAccessible = Modifier.isPublic(classModifiers) || (isPackageVisible(classModifiers) && scanSpec.enableClassAccessibility);
+        final boolean includeClass = scanSpec.ignoreClassVisibility || classIsAccessible;
+
+        if (!includeClass && !isModule && !isPackage) {
             throw new SkipClassException("Class is not public, and ignoreClassVisibility() was not called");
         }
 
@@ -1289,6 +1293,10 @@ class Classfile {
         if (superclassNameCpIdx > 0) {
             superclassName = getConstantPoolClassName(superclassNameCpIdx);
         }
+    }
+    
+    private boolean isPackageVisible(int classModifiers) {
+        return !Modifier.isPublic(classModifiers) && !Modifier.isPrivate(classModifiers) && !Modifier.isProtected(classModifiers);
     }
 
     // -------------------------------------------------------------------------------------------------------------
@@ -1328,11 +1336,16 @@ class Classfile {
             // Info on modifier flags: http://docs.oracle.com/javase/specs/jvms/se7/html/jvms-4.html#jvms-4.5
             final int fieldModifierFlags = reader.readUnsignedShort();
             final boolean isPublicField = ((fieldModifierFlags & 0x0001) == 0x0001);
+            final boolean isProtectedField = ((fieldModifierFlags & 0x0004) == 0x0004);
             final boolean fieldIsVisible = isPublicField || scanSpec.ignoreFieldVisibility;
+            final boolean fieldIsAccessible = fieldIsVisible || ((isProtectedField || isPackageVisible(fieldModifierFlags)) && scanSpec.enableFieldAccessibility);
+            final boolean includeField = fieldIsVisible || fieldIsAccessible;
             final boolean getStaticFinalFieldConstValue = scanSpec.enableStaticFinalFieldConstantInitializerValues
-                    && fieldIsVisible;
+                    && fieldIsAccessible;
+            
+            
             List<TypeAnnotationDecorator> fieldTypeAnnotationDecorators = null;
-            if (!fieldIsVisible || (!scanSpec.enableFieldInfo && !getStaticFinalFieldConstValue)) {
+            if (!includeField || (!scanSpec.enableFieldInfo && !getStaticFinalFieldConstValue)) {
                 // Skip field
                 reader.readUnsignedShort(); // fieldNameCpIdx
                 reader.readUnsignedShort(); // fieldTypeDescriptorCpIdx
@@ -1421,7 +1434,7 @@ class Classfile {
                         reader.skip(attributeLength);
                     }
                 }
-                if (scanSpec.enableFieldInfo && fieldIsVisible) {
+                if (scanSpec.enableFieldInfo && includeField) {
                     if (fieldInfoList == null) {
                         fieldInfoList = new FieldInfoList();
                     }
@@ -1450,7 +1463,11 @@ class Classfile {
             // Info on modifier flags: http://docs.oracle.com/javase/specs/jvms/se7/html/jvms-4.html#jvms-4.6
             final int methodModifierFlags = reader.readUnsignedShort();
             final boolean isPublicMethod = ((methodModifierFlags & 0x0001) == 0x0001);
+            final boolean isProtectedMethod = ((methodModifierFlags & 0x0004) == 0x0004);
             final boolean methodIsVisible = isPublicMethod || scanSpec.ignoreMethodVisibility;
+            final boolean methodIsAccessible = methodIsVisible || ((isProtectedMethod || isPackageVisible(methodModifierFlags)) && scanSpec.enableMethodAccessibility);
+            final boolean includeMethod = methodIsVisible || methodIsAccessible;
+            
             List<MethodTypeAnnotationDecorator> methodTypeAnnotationDecorators = null;
             String methodName = null;
             String methodTypeDescriptor = null;
@@ -1474,7 +1491,7 @@ class Classfile {
             boolean methodHasBody = false;
             int minLineNum = 0;
             int maxLineNum = 0;
-            if (!methodIsVisible || (!enableMethodInfo && !isAnnotation)) {
+            if (!includeMethod || (!enableMethodInfo && !isAnnotation)) {
                 // Skip method attributes
                 for (int j = 0; j < attributesCount; j++) {
                     reader.skip(2); // attribute_name_index

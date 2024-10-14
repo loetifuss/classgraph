@@ -4,6 +4,8 @@ public abstract class ParentClass {
 
 	private String privateField = "I'm private";
 	
+	protected ProtectedFieldDependency protectedField = new ProtectedFieldDependency();
+	
     private PrivateDependency privateDependency() {
         return new PrivateDependency();
     }
@@ -15,5 +17,10 @@ public abstract class ParentClass {
     public PublicDependency publicDependency() {
         return new PublicDependency();
     }
+    
+    PackagePrivateDependency packagePrivateDependency() {
+        return new PackagePrivateDependency();
+    }
+    
 
 }
